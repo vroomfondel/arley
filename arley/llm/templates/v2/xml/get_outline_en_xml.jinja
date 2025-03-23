@@ -1,0 +1,9 @@
+The following contains an XML-document (enclosed in XML-tags "contract").
+
+<contract>
+{{ md_or_plaintext.strip() | indent("\t", True, True) }}
+</contract>
+
+Do not use XML-tags in your output.
+Write an outline in {%+ if lang == "en" %}english{% else %}german{% endif +%} based on this contract. For sub-points, summarize them under the respective headline in that outline.
+Do not state the details in each sub-point, but rather give a significant (three words maximum) phrase for each point.

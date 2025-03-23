@@ -1,0 +1,10 @@
+{%  if refine_type == "contract_outline" %}Beispielhafte Gliederungen (jeweils in "contract_outline" XML-tags eingeschlossen):{% set sinfo = "Beispielhafte Gliederung" %}{% endif %}
+{%  if refine_type == "contract_summary" %}Beispielhafte Zusammenfassungen (jeweils in "contract_summary" XML-tags eingeschlossen):{% set sinfo = "Beispielhafte Zusammenfassung" %}{% endif %}
+{%  if refine_type == "contract_excerpt" %}Beispielhafte Phrasen (jeweils in "contract_excerpt" XML-tags eingeschlossen):{% set sinfo = "Beispielhafte Phrase" %}{% endif %}
+{%  if refine_type == "contract" %}Beispielhafte Verträge (jeweils in "contract" XML-tags eingeschlossen):{% set sinfo = "Beispielhafter Vertrag" %}{% endif %}
+
+{% for meaug in merefine %}
+<{{ refine_type }}>
+{{ meaug["document"].strip() }}
+</{{ refine_type }}>
+{% endfor %}

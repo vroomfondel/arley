@@ -1,0 +1,10 @@
+{%  if refine_type == "contract_outline" %}Exemplary outlines (each one separated by a line of "#####################"):{% set sinfo = "Exemplary outline" %}{% endif %}
+{%  if refine_type == "contract_summary" %}Exemplary outlines (each one separated by a line of "#####################"){% set sinfo = "Exemplary summary" %}{% endif %}
+{%  if refine_type == "contract_excerpt" %}Exemplary phrases (each one separated by a line of "#####################"):{% set sinfo = "Exemplary excerpt" %}{% endif %}
+{%  if refine_type == "contract" %}Exemplary contracts (each one separated by a line of "#####################"):{% set sinfo = "Exemplary contract" %}{% endif %}
+
+{% for meaug in merefine %}
+#####################
+{{ meaug["document"].strip() }}
+{%  if not loop.nextitem %}#####################{% endif %}
+{% endfor %}

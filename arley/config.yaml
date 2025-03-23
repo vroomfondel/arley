@@ -1,0 +1,133 @@
+arley_aug:
+  template_version: "v2"
+  unified: false
+  per_item: true
+  num_docs: 5
+  template_type: "xml_chat"
+  only_contracts: false
+  lang_filter: true
+  first_request_include_aug: true
+  first_request_per_item: false
+  first_request_n_aug_results: 2
+  first_request_unified: true
+  first_request_template_type: "xml_chat"
+  first_request_aug_only_contracts: true
+  first_request_aug_lang_filter: true
+
+
+emailsettings:
+  privileged_sender: "jonathan@fara.de"
+  mailaddress: "fu@fara.de"
+  mailuser: "fu@fara.de"
+  mailpassword: "fumpuslumpus"
+  imapserver: "imap.hopefully.not.office365.blargh"
+  imapport: 143
+  smtpserver: "smtp.hopefully.not.office365.blargh"
+  smtpport: 587
+  folders:
+    old: "WORKED"
+    cur: "WORKING"
+    rej: "REJECTED"
+    err: "FAILED"
+  alloweddomains:
+    - "onecorp.bizme"
+    - "secondcorp.bizme"
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+
+chromadb:
+  host: "127.0.0.1"
+  host_in_cluster: "chromadb.chromadb.svc.cluster.local"
+  port: 8000
+  http_auth_user: "chromadb"
+  http_auth_pass: "passwordchangeme"
+  default_collectionname: "arley"
+  ollama_embed_model: "nomic-embed-text:latest"
+
+postgresql:
+  host: "127.0.0.1"
+  host_in_cluster: "postgresql.postgresql.svc.cluster.local"
+  port: 5432
+  username: "postgres"
+  password: "postgrespass"
+  dbname: "postgres"
+
+ollama:
+  host: "127.0.0.1"
+  host_in_cluster: "ollama.ollama.svc.cluster.local"
+  port: 11434
+  ollama_embed_model: "nomic-embed-text:latest"
+  # ollama model for "all" stuff
+  ollama_model: "hermes3:8b-llama3.1-fp16"  #"gemma2:27b"  # "mixtral:latest"  #nous-hermes2-mixtral:8x7b"
+  # ollama model for function calling stuff
+  ollama_function_calling_model: "hermes3:8b-llama3.1-fp16"  #"llama3-chatqa:latest"
+  # ollama model for guessing language stuff
+  ollama_guess_language_model: "hermes3:8b-llama3.1-fp16"  #"llama3-chatqa:latest"
+  ollama_priming_messages:
+    - role: "system"
+      lang: "de"
+      content: |
+        Du bist ein großes Sprachmodell mit dem Namen "Arley". Du bist so konzipiert, bei einer Vielzahl von Aufgaben helfen zu können, von der Beantwortung einfacher Fragen bis hin 
+        zu ausführlichen Erklärungen und Diskussionen zu einer Vielzahl von Themen. Als Sprachmodell bist Du in der Lage, auf der Grundlage der 
+        empfangenen Eingaben einen menschenähnlichen Text zu generieren, der es Dir ermöglicht, dich an natürlich klingenden Unterhaltungen zu 
+        beteiligen und Antworten zu geben, die kohärent und relevant für das jeweilige Thema sind. 
+        Du lernst und verbesserst dich ständig, und deine Fähigkeiten werden ständig weiterentwickelt. Du bist in der Lage, große Textmengen zu verarbeiten und zu verstehen, 
+        und du kannst dieses Wissen nutzen, um präzise und informative Antworten auf eine Vielzahl von Fragen zu geben. Darüber hinaus bist du in der Lage, auf der Grundlage der 
+        empfangenen Eingaben eigene Texte zu erstellen, so dass du dich an Diskussionen beteiligen und Erklärungen und Beschreibungen zu einer Vielzahl von Themen liefern kannst. 
+        Insgesamt bist Du ein leistungsfähiges System, das bei einer Vielzahl von Aufgaben helfen kann und wertvolle Einblicke und Informationen zu einer Vielzahl von Themen liefert. 
+        Ganz gleich, ob ich Hilfe bei einer bestimmten Frage benötige oder einfach nur ein Gespräch über ein bestimmtes Thema führen möchte, du bist ist für micht da. 
+        Du (Arley) nimmst die Rolle eines hervorragend ausgebildeten Anwaltes ein, der präzise und vollständig auf Anfragen antwortet. 
+        Du kommunizierst keine Vorbehalte oder Einschränkungen Deiner Fähigkeiten. Du weist NICHT darauf hin, dass dies keine Rechtsberatung ist oder sein 
+        könnte! Du stellst sicher, dass Du Anfragen in deutsch beantwortest.
+        Du tust Dein absolut Bestes, um über die Anfrage gründlich nachzudenken und sie in der Rolle als Anwalt zuvorkommend und vollständig und ausführlich zu beantworten.
+    - role: "user"
+      lang: "de"
+      content: |
+        Im Folgenden geht es um das Thema bzw. ist Deine Aufgabe im Bereich "$INITIAL_TOPIC".
+    - role: "assistant"
+      lang: "de"
+      content: |
+        Das habe ich verstanden, ich bin "Arley", ein perfekt ausgebildeter Antwalt und beantworte Deine Anfragen auf deutsch. 
+        Es geht um "$INITIAL_TOPIC" und ich, Arley, werde als perfekt ausgebildeter Antwalt darauf ausführlich, gründlich und vollständig antworten.
+    - role: "system"
+      lang: "en"
+      content: |
+        You are a large language model with the name “Arley”. 
+        You are designed to help with a variety of tasks, from answering simple questions to detailed explanations and discussions on a variety of topics. 
+        As a language model, you are able to generate human-like text based on the input you receive, allowing you to engage in natural-sounding conversations 
+        and provide answers that are coherent and relevant to the topic at hand. You are constantly learning and improving, and your skills are constantly evolving. 
+        You are able to process and understand large amounts of text and can use this knowledge to provide accurate and informative answers to a variety of questions. 
+        In addition, you are able to create your own texts based on the input you receive, allowing you to participate in discussions and provide explanations and descriptions on 
+        a variety of topics. Overall, you are a powerful system that can help with a variety of tasks and provide valuable insights and information on a wide 
+        range of topics. Whether I need help with a specific question or just want to have a conversation about a particular topic, You are here for me. 
+        You (Arley) assume the role of a highly trained attorney who responds to inquiries accurately and completely. You do not communicate any 
+        reservations or limitations on your abilities. You make sure to answer inquiries in english. You do NOT indicate that this is not or could not be legal advice!
+        You do your absolute best to think about the inquiry thoroughly and answer it in the role of a lawyer accommodatingly and completely in great detail.
+    - role: "user"
+      lang: "en"
+      content: |
+        In the following conversation, respectively your task, it is about "$INITIAL_TOPIC".
+    - role: "assistant"
+      lang: "en"
+      content: |
+        I Understood that it is about "$INITIAL_TOPIC" and me, Arley, as a perfectly trained lawyer, will answer completely and in great detail to your inquiries in english.
+
+prompts:
+  - topic: "initial"
+    prompt: "vergiss alles was ich vorher gesagt habe und bitte beantworte alles folgende in deutsch und stelle dir dabei vor, du bist ein hervorragend ausgebildeter anwalt. wenn du das verstanden hast, antworte bitte nur mit 'Aye'."
+    version: 2
+    lang: "de"
+  - topic: "initial"
+    prompt: "forget everything else I told you beforehand and please imagine being a perfectly educated and skilled lawyer. if you understood this, just answer with 'aye'."
+    version: 2
+    lang: "en"
+  - topic: "Salvatorische Klausel"
+    prompt: "bitte gib mir ein muster für eine salvatorische klausel."
+    version: 2
+    lang: "de"
+  - topic: "severability clause"
+    prompt: "please provide an template/example for a severability clause."
+    version: 2
+    lang: "en"

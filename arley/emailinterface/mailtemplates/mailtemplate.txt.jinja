@@ -1,0 +1,13 @@
+{{ ollama_response_body }}
+
+{% if lang == "de"  %}{% set swa = " schrieb am " %}{%  else %}{% set swa = " wrote on " %}{% endif %}
+{{ ("<"+previous_sender+">"+swa+previous_datum) | indent(1, True, True) | indent(">", True, True) }}
+{{ previous_text | indent(1, True, True) | indent(">", True, True) }}
+
+***********************************************************************************
+Please keep this in your reply and do not make changes below the line before this.
+To continue the discussion, just reply to this email.
+[arley-id {{ arleyid }}]
+***********************************************************************************
+{{  ollama_response | tojson(4) }}
+***********************************************************************************

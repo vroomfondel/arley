@@ -1,0 +1,190 @@
+---
+- name: Create arley namespace
+  kubernetes.core.k8s:
+    name: arley
+    api_version: v1
+    kind: Namespace
+    state: present
+
+
+- name: Create privateregcred secrect in arley namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: privateregcred
+        namespace: arley
+      type: kubernetes.io/dockerconfigjson
+      data:
+        # SOMEUSER:SOMEPASS DUMMY
+        .dockerconfigjson: CgkiYXV0aHMiOiB7CgkJImh0dHBzOi8vaW5kZXguZG9ja2VyLmlvL3YxLyI6IHsKCQkJImF1dGgiOiAiVTA5TlJWVlRSVkk2VTA5TlJWQkJVMU1LIgoJCX0KCX0KfQo=
+
+- name: Create arley-secrets which will be used in ENV in the container
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: arley-secrets
+        namespace: arley
+      type: Opaque
+      data:
+        # base64-encode for secrets!!!
+        POSTGRES_PASSWORD: "{{ 'SOMEPASS'| b64encode }}"
+        MORE_DATA_UNDEFINED: "{{ 'UNDEFINED_DATA_GALORE'| b64encode }}"
+
+
+- name: Create arley env configmap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: arley-env-config
+        namespace: arley
+      data:
+        OLLAMA_MODEL: "hermes3:8b-llama3.1-fp16"  #"nous-hermes2-mixtral:8x7b"  # "llama3.1:70b-instruct-q3_K_M"  # "llama3.1:latest"  # "llama3.1:70b-instruct-q4_0"  #"nous-hermes2-mixtral:8x7b"  #"gemma2:27b"  #mixtral:latest"
+        OLLAMA_FUNCTION_CALLING_MODEL: "hermes3:8b-llama3.1-fp16"  #"nous-hermes2-mixtral:8x7b"  # "llama3.1:70b-instruct-q3_K_M"  # "llama3.1:latest"  #"llama3.1:70b-instruct-q4_0"  #  "nous-hermes2-mixtral:8x7b"  # "llama3:latest"
+        OLLAMA_GUESS_LANGUAGE_MODEL: "hermes3:8b-llama3.1-fp16"  # "nous-hermes2-mixtral:8x7b"  # "llama3.1:70b-instruct-q3_K_M"  # "llama3.1:latest"  #"llama3.1:70b-instruct-q4_0"   # "llama3:latest"
+        CHROMADB_DEFAULT_COLLECTIONNAME: "arley"
+        CHROMADB_OLLAMA_EMBED_MODEL: "nomic-embed-text:latest"
+        CHROMADB_PORT: "8000"
+        CHROMADB_HOST: "chromadb.chromadb.svc.cluster.local"
+        ARLEY_AUG_UNIFIED: "False"
+        ARLEY_AUG_PER_ITEM: "True"
+        ARLEY_AUG_NUM_DOCS: "5"
+        ARLEY_AUG_TEMPLATE_TYPE: "xml_chat"
+        REFINELOG_RECIPIENTS: "fu@fara.de"  # multiple: separated by colon (",")
+        ARLEY_AUG_ONLY_CONTRACTS: "False"
+        ARLEY_AUG_LANG_FILTER: "True"
+        ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG: "True"
+        ARLEY_AUG_FIRST_REQUEST_UNIFIED: "True"
+        ARLEY_AUG_FIRST_REQUEST_PER_ITEM: "False"
+        ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE: "xml_chat"
+        ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS: "2"
+        ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS: "True"
+        ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER: "True"
+
+
+- name: Create arley imaphandler-deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: arley-imaphandler-deployment
+        namespace: arley
+        labels:
+          app: arley-imaphandler-deployment
+        annotations:
+          keel.sh/policy: force
+          keel.sh/match-tag: "true"
+          keel.sh/pollSchedule: "@every 5m"
+          # Seconds  Minutes  Hours  Day of month   Month  Day of week
+          keel.sh/trigger: poll
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: arley-imaphandler
+        template:
+          metadata:
+            labels:
+              app: arley-imaphandler
+          spec:
+            restartPolicy: Always
+#            nodeSelector:
+#              kubernetes.io/hostname: "name_of_some_node_or_just_omit_this"
+#            initContainers:
+#              - name: localtime-helper
+#                command: [ "bash", "-c", "/tmp/mariadb-initcontainer-config/0_loop" ]
+#                volumeMounts:
+#                  - name: lokidata
+#                    mountPath: /mnt
+            imagePullSecrets:
+              - name: privateregcred
+            containers:
+              - name: arleyimaploop
+                imagePullPolicy: Always
+                # image: postgres:16-bookworm
+                image: arleyelasticcio/arley:latest
+#                command: [ "bash", "-c", "/tmp/mariadb-initcontainer-config/0_loop" ]
+                # command: [ "python3", "main.py", "IMAPLOOP" ]
+                command: [ "/app/python_venv.sh", "main.py", "IMAPLOOP" ]
+                envFrom:
+                  - configMapRef:
+                      name: arley-env-config
+                  - secretRef:
+                      name: arley-secrets
+                env:
+                  - name: NODE_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.hostIP
+                  - name: POD_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP
+
+
+- name: Create arley ollamaloop-deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: arley-ollamaloop-deployment
+        namespace: arley
+        labels:
+          app: arley-ollamaloop-deployment
+        annotations:
+          keel.sh/policy: force
+          keel.sh/match-tag: "true"
+          keel.sh/pollSchedule: "@every 5m"
+          # Seconds  Minutes  Hours  Day of month   Month  Day of week
+          keel.sh/trigger: poll
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: arley-ollamaloop
+        template:
+          metadata:
+            labels:
+              app: arley-ollamaloop
+          spec:
+            restartPolicy: Always
+            nodeSelector:
+              kubernetes.io/hostname: "name_of_node_with_GPU_and_nvidia_runtime"
+            imagePullSecrets:
+              - name: privateregcred
+            containers:
+              - name: arleyollamaloop
+                imagePullPolicy: Always
+                image: arleyelasticcio/arley:latest
+                # command: [ "python3", "main.py", "OLLAMALOOP" ]
+                command: [ "/app/python_venv.sh", "main.py", "OLLAMALOOP" ]
+                envFrom:
+                  - configMapRef:
+                      name: arley-env-config
+                  - secretRef:
+                      name: arley-secrets
+                env:
+                  - name: NODE_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.hostIP
+                  - name: POD_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP

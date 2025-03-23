@@ -1,0 +1,12 @@
+The following contains an XML-document (enclosed in XML-tags "contract").
+
+<contract>
+{{ md_or_plaintext.strip() | indent("\t", True, True) }}
+</contract>
+
+{%+ include "rules_en_xml.jinja" +%}
+
+Make sure to properly markup headlines and rewrite lists to be genuine markup (ordered and/or un-ordered) lists so that the
+resulting markdown has a semantically improved, usefull and meaningfull structure without losing structural information from the original document.
+Also, make sure to not change the text itself.
+Please reformat that document into proper markdown format and make sure to follow the rules and not to change the text itself (i.e. only change the formatting).

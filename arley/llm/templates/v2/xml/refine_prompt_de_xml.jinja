@@ -1,0 +1,17 @@
+{% include "docinfo_de_xml.jinja" +%}
+
+<xmldata>
+    <original_prompt>
+{{original_prompt.strip() | indent("\t\t", True, True) }}
+    </original_prompt>
+    <original_response>
+{{ existing_response.strip() | indent("\t\t", True, True)}}
+    </original_response>
+    <context>
+{{ context.strip() | indent("\t\t", True, True)}}
+    </context>
+</xmldata>
+
+{%+ include "rules_de_xml.jinja" +%}
+
+Unter Berücksichtigung des neuen Kontextes / der neuen Beispiele, überarbeite bitte Deine ursprüngliche Antwort so, dass sie besser zur ursprünglichen Anfrage paßt.

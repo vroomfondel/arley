@@ -1,0 +1,9 @@
+The following contains an XML-document (enclosed in XML-tags "contract").
+
+<contract>
+{{ md_or_plaintext.strip() | indent("\t", True, True) }}
+</contract>
+
+{%+ include "rules_en_xml.jinja" +%}
+
+Create a concise overall summary in {%+ if lang == "en" %}english{% else %}german{% endif +%} of that contract.

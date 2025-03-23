@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# linting
+isort==5.13.*
+black==24.2.*

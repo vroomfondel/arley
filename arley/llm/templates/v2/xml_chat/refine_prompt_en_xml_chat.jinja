@@ -1,0 +1,11 @@
+The following contains an XML-document (enclosed in XML-tags "xmldata").
+This XML-document contains further information and examples to adapt your response.
+{% include "docinfo_en_xml_chat.jinja" +%}
+
+<xmldata>
+{{ context.strip() | indent("\t", True, True)}}
+</xmldata>
+
+{%+ include "rules_en_xml_chat.jinja" +%}
+
+Now, Using the supplied information and examples, please refine your previous response to better answer my request.

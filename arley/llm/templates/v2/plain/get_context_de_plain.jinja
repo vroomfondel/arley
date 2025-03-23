@@ -1,0 +1,10 @@
+{%  if refine_type == "contract_outline" %}Beispielhafte Gliederungen (jeweils abgetrennt durch Zeilen mit "#####################"):{% set sinfo = "Beispielhafte Gliederung" %}{% endif %}
+{%  if refine_type == "contract_summary" %}Beispielhafte Zusammenfassungen (jeweils abgetrennt durch Zeilen mit "#####################"):{% set sinfo = "Beispielhafte Zusammenfassung" %}{% endif %}
+{%  if refine_type == "contract_excerpt" %}Beispielhafte Phrasen (jeweils abgetrennt durch Zeilen mit "#####################"):{% set sinfo = "Beispielhafte Phrase" %}{% endif %}
+{%  if refine_type == "contract" %}Beispielhafte Verträge (jeweils abgetrennt durch Zeilen mit "#####################"):{% set sinfo = "Beispielhafter Vertrag" %}{% endif %}
+
+{% for meaug in merefine %}
+#####################
+{{ meaug["document"].strip() }}
+{%  if not loop.nextitem %}#####################{% endif %}
+{% endfor %}

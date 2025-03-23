@@ -1,0 +1,354 @@
+---
+# kubectl apply -k https://github.com/kubernetes-sigs/node-feature-discovery/deployment/overlays/default?ref=v0.16.1
+#
+# check: https://github.com/digitalis-io/k3s-on-prem-production
+#
+## https://github.com/ollama/ollama/blob/main/README.md#quickstart
+## https://hub.docker.com/r/ollama/ollama
+#
+# check: https://github.com/NVIDIA/k8s-device-plugin?tab=readme-ov-file#enabling-gpu-support-in-kubernetes
+# check: https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/
+#
+## curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+## curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+## sudo apt-get update
+## sudo apt-get install -y nvidia-container-toolkit
+## sudo nvidia-ctk runtime configure --runtime=docker
+## sudo systemctl restart docker
+#
+# docker_cmd="docker run --gpus=all --rm -v ${OLLAMA_MODELDIR}:/ollama_models -p 11434:11434 -e OLLAMA_MODELS=/ollama_models -e OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL}"
+
+# local volumes vs. hostpath: https://vocon-it.com/2018/12/20/kubernetes-local-persistent-volumes/
+
+- name: Create ollama namespace
+  kubernetes.core.k8s:
+    name: ollama
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Create ollama service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      apiVersion: v1
+      metadata:
+        name: ollama
+        namespace: ollama
+        labels:
+          app: ollama
+      spec:
+        selector:
+          app: ollama
+        ports:
+          - port: 11434
+            name: ollamaport
+            targetPort: 11434
+
+
+- name: Create ollama configmap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: ollama-config
+        namespace: ollama
+      data:
+        OLLAMA_MODELS: "/ollama_models"
+        OLLAMA_NUM_PARALLEL: "1"
+        OLLAMA_MAX_LOADED_MODELS: "2"
+        OLLAMA_FLASH_ATTENTION: "1"
+        OLLAMA_KV_CACHE_TYPE: "q8_0"
+
+
+- name: Create nvidia-smi deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nvidia-smi-deployment
+        namespace: ollama
+        labels:
+          app: nvidia-smi-deployment
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: nvidia-smi
+        template:
+          metadata:
+            labels:
+              app: nvidia-smi
+          spec:
+            hostPID: true
+            runtimeClassName: nvidia
+            nodeSelector:
+              kubernetes.io/hostname: "name_of_node_with_GPU_and_nvidia_runtime"
+            containers:
+            - name: cuda-container
+              image: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+              securityContext:
+                privileged: true
+              # nvidia/cuda:12.2.2-runtime-ubuntu22.04
+              # nvcr.io/nvidia/k8s/cuda-sample:nbody
+              args: ["nvidia-smi", "-l", "5"]
+              env:
+              - name: NVIDIA_VISIBLE_DEVICES
+                value: all
+              - name: NVIDIA_DRIVER_CAPABILITIES
+                value: all
+
+
+- name: Create ollama deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ollama-deployment
+        namespace: ollama
+        labels:
+          app: ollama-deployment
+        annotations:
+          keel.sh/policy: force
+          keel.sh/match-tag: "true"
+          keel.sh/pollSchedule: "0 15 21 * * *"
+          # Seconds  Minutes  Hours  Day of month   Month  Day of week
+          keel.sh/trigger: poll
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        selector:
+          matchLabels:
+            app: ollama
+        template:
+          metadata:
+            labels:
+              app: ollama
+          spec:
+            restartPolicy: Always
+            nodeSelector:
+              kubernetes.io/hostname: "name_of_node_with_GPU_and_nvidia_runtime"
+            runtimeClassName: nvidia
+            containers:
+              - name: ollama
+                image: ollama/ollama
+                imagePullPolicy: Always
+#                resources:
+#                  limits:
+#                    nvidia.com/gpu: 2
+                envFrom:
+                  - configMapRef:
+                      name: ollama-config
+#                envFrom:
+#                  - secretRef:
+#                      name: nodered-secrets
+                tty: true
+                ports:
+                  - containerPort: 11434
+                    name: ollamaport
+                env:
+                  - name: NODE_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.hostIP
+                  - name: POD_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP
+#                livenessProbe:
+#                  exec:
+#                   command: [ "/usr/local/bin/healthcheck.sh" ]
+#                  initialDelaySeconds: 10
+#                  periodSeconds: 5
+#                  failureThreshold: 2
+#                  timeoutSeconds: 2
+                volumeMounts:
+                  - name: ollama-data
+                    mountPath: /ollama_models
+            volumes:
+              - name: ollama-data
+                hostPath:
+                  path: /mnt/data/ollama_models
+                  type: Directory
+
+
+- name: Create ollama http access route
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: traefik.containo.us/v1alpha1
+      kind: IngressRoute
+      metadata:
+        name: ollama-ingress
+        namespace: ollama
+      spec:
+        entryPoints:
+          - web
+        routes:
+          - kind: Rule
+            match: Host(`ollama.intra.fara.de`)
+            priority: 100
+            services:
+              - kind: Service
+                name: ollama
+                namespace: ollama
+                passHostHeader: true
+                port: 11434
+
+
+
+- name: Create openwebui service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      kind: Service
+      apiVersion: v1
+      metadata:
+        name: openwebui
+        namespace: ollama
+        labels:
+          app: ollama-openwebui
+      spec:
+        selector:
+          app: ollama-openwebui
+        ports:
+          - port: 8080
+            name: openwebuiport
+            targetPort: 8080
+
+
+- name: Create ollama open-webui configmap
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: ollama-openwebui-config
+        namespace: ollama
+      data:
+        OLLAMA_BASE_URL: "http://ollama.ollama.svc.cluster.local:11434"
+        WEBUI_SECRET_KEY: "SOMEOTHERPASS"
+
+
+- name: Create ollama-openwebui deployment
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: ollama-openwebui-deployment
+        namespace: ollama
+        labels:
+          app: ollama-openwebui-deployment
+        annotations:
+          keel.sh/policy: force
+          keel.sh/match-tag: "true"
+          # keel.sh/pollSchedule: "0 0 13 * * *"
+          keel.sh/pollSchedule: "@every 10m"
+          # Seconds  Minutes  Hours  Day of month   Month  Day of week
+          keel.sh/trigger: poll
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ollama-openwebui
+        template:
+          metadata:
+            labels:
+              app: ollama-openwebui
+          spec:
+#            affinity:
+#              nodeAffinity:
+#                requiredDuringSchedulingIgnoredDuringExecution:
+#                  nodeSelectorTerms:
+#                  - matchExpressions:
+#                    - key: kubernetes.io/hostname
+#                      operator: In
+#                      values:
+#                      - "argras2"
+            restartPolicy: Always
+            nodeSelector:
+              kubernetes.io/hostname: "name_of_node_with_GPU_and_nvidia_runtime"
+#              # kubernetes.io/arch: "arm64"
+            # imagePullSecrets:
+            #  - name: privateregcred
+            containers:
+              - name: ollama-openwebui
+                image: ghcr.io/open-webui/open-webui:main
+                imagePullPolicy: Always
+                envFrom:
+                  - configMapRef:
+                      name: ollama-openwebui-config
+#                envFrom:
+#                  - secretRef:
+#                      name: nodered-secrets
+                tty: true
+                ports:
+                  - containerPort: 8080
+                    name: openwebuiport
+                env:
+                  - name: NODE_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.hostIP
+                  - name: POD_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP
+#                livenessProbe:
+#                  exec:
+#                   command: [ "/usr/local/bin/healthcheck.sh" ]
+#                  initialDelaySeconds: 10
+#                  periodSeconds: 5
+#                  failureThreshold: 2
+#                  timeoutSeconds: 2
+                volumeMounts:
+                  - name: openwebui-data
+                    mountPath: /app/backend/data
+            volumes:
+              - name: openwebui-data
+                hostPath:
+                  path: /mnt/ssddata/ollama_webui
+                  type: Directory
+#                persistentVolumeClaim:
+#                  claimName: openwebui-data
+#              - name: nodered-config-tmpdir
+#                emptyDir:
+#                  sizeLimit: 5Mi
+
+
+
+- name: Create openwebui http access route
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: traefik.containo.us/v1alpha1
+      kind: IngressRoute
+      metadata:
+        name: openwebui-ingress
+        namespace: ollama
+      spec:
+        entryPoints:
+          - web
+        routes:
+          - kind: Rule
+            match: Host(`arley.intra.fara.de`)
+            priority: 100
+            services:
+              - kind: Service
+                name: openwebui
+                namespace: ollama
+                passHostHeader: true
+                port: 8080

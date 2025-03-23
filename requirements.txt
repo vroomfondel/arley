@@ -1,0 +1,70 @@
+ollama
+# chromadb
+chromadb-client
+bcrypt
+pytz
+types-pytz
+loguru
+pydantic
+pydantic-settings
+python_magic
+pydantic_yaml
+PyYAML
+ruamel.yaml
+#duckduckgo_search
+serpapi
+
+numpy
+
+# slack-sdk
+
+httpx
+instructor
+# needed for instructor->ollama
+openai
+
+openparse
+
+# HT 20240905 disabled at the moment...
+# spacy
+# en-core-web-md
+# de-core-news-md
+# nltk
+
+llama_index
+llama-index-llms-ollama
+llama-index-embeddings-ollama
+llama-index-readers-file
+pymupdf
+
+langchain
+langchain-community
+langchain-core
+
+langgraph
+BeautifulSoup4
+
+jinja2
+redis
+sqlalchemy
+psycopg2-binary
+# psycopg2 #needs: apt -y install libq-dev
+cachetools
+
+reputils==0.0.11
+# https://github.com/alfonsrv/mail-parser-reply
+mail-parser-reply
+imaplib2
+IMAPClient
+# msgraph-sdk
+# msal
+
+# for importing to vector-db
+# html to markdown
+markdownify
+
+# word to html
+mammoth
+
+# xlsx read
+openpyxl

@@ -1,0 +1,22 @@
+FROM postgres:17-bookworm
+# FROM pgvector/pgvector:pg16
+RUN localedef -i de_DE -c -f UTF-8 -A /usr/share/locale/locale.alias de_DE.UTF-8
+ENV LANG=de_DE.utf8
+
+RUN apt update && apt -y install git build-essential postgresql-server-dev-17
+
+ARG pgvector_version=v.0.8.0
+
+# https://github.com/pgvector/pgvector?tab=readme-ov-file#linux-and-mac
+RUN mkdir /tmp/pgvector_build  &&  \
+    cd /tmp/pgvector_build && \
+    git clone --branch $pgvector_version https://github.com/pgvector/pgvector.git &&  \
+    cd pgvector &&  \
+    make && \
+    make install
+
+ARG buildtime=buildtime_is_undefined
+ENV BUILDTIME=$buildtime
+
+
+

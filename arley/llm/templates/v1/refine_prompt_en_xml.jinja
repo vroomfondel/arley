@@ -1,0 +1,10 @@
+The original prompt is the text within the following xml-tags "original_prompt":
+<original_prompt>{{ original_prompt.strip() }}</original_prompt>
+
+Our original response to that prompt is enclosed in the following xml-tags "original_response":
+<original_response>{{ existing_response.strip() }}</original_response>
+
+We have the opportunity to refine the original response (only if needed) based on some more context/examples. This new context and context these new examples are as follows.
+{{ context.strip() }}
+
+Given the new context, refine the original response to better answer the original prompt. If the context isn't useful, just return the original response.
