@@ -21,6 +21,7 @@ _OLLAMA_OPTIONS: dict = {
 
 try:
     import arley.config as config
+    from loguru import logger
 
     _HOST = config.OLLAMA_HOST
     _OLLAMA_MODEL = config.settings.ollama.ollama_model

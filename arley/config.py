@@ -389,7 +389,11 @@ TEMPLATEDIRPATH: Path = Path(__file__).parent.resolve()
 TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, "templates")
 TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, TEMPLATE_VERSION)
 
+logger.info(f"Effective OLLAMA_MODEL: {OLLAMA_MODEL}")
+logger.info(f"Effective OLLAMA_GUESS_LANGUAGE_MODEL: {OLLAMA_GUESS_LANGUAGE_MODEL}")
+logger.info(f"Effective OLLAMA_EMBED_MODEL: {OLLAMA_EMBED_MODEL}")
 logger.info(f"Effective templatedirpath: {TEMPLATEDIRPATH}")
+
 
 if __name__ == "__main__":
     log_settings()
