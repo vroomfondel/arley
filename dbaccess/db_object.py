@@ -33,7 +33,7 @@ from sqlalchemy.orm import relationship
 
 from loguru import logger
 
-LOGME_VERBOSE: bool = False
+LOGME_VERBOSE: bool = True
 
 # Create and engine and get the metadata
 # _base = declarative_base()

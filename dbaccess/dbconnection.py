@@ -71,8 +71,8 @@ class DBConnectionEngine(metaclass=Singleton):
             pool_size=0,  # means UNLIMITED
             # pool_size=20,
             # max_overflow=0
-            #echo=True,
-            # isolation_level="AUTOCOMMIT",
+            echo=True,
+            isolation_level="AUTOCOMMIT"
         )
 
     @contextmanager

@@ -386,6 +386,7 @@ if os.getenv("REFINELOG_RECIPIENTS"):
 TEMPLATE_VERSION: str = os.getenv("ARLEY_AUG_TEMPLATE_VERSION", settings.arley_aug.template_version)
 
 TEMPLATEDIRPATH: Path = Path(__file__).parent.resolve()
+TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, "llm")
 TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, "templates")
 TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, TEMPLATE_VERSION)
 

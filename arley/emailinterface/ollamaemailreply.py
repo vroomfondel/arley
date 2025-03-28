@@ -591,11 +591,14 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
     try:
         loopcounter: int = 0
         while True:
+            logger.debug(f"loopcounter={loopcounter}")
+
             loopcounter += 1
             sql: str = (
                 f"select * from emails where processresult='{Result.pending.value}' and toarley order by received asc"
             )
             mails: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(sql)
+            logger.debug(f"MAILIN sql={sql} => {len(mails) if mails else 0}")
 
             if mails:
                 for mail in mails:
@@ -611,6 +614,7 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
                 f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received asc"
             )
             mailsout: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(sqlout)
+            logger.debug(f"MAILOUT sqlout={sqlout} => {len(mailsout) if mailsout else 0}")
 
             if mailsout:
                 for mail in mailsout:
