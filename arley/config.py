@@ -301,7 +301,7 @@ def get_num_ctx_by_model_name(model_name: str, default_num_ctx: int = 2048) -> i
     match model_name:
         case s if s.startswith("deepseek-r1"):
             # trained context length: 131_072
-            num_ctx = 32 * 1024
+            num_ctx = 64 * 1024
         case s if s.startswith("bespoke-minicheck"):
             num_ctx = 32 * 1024
         case s if s.startswith("reader-lm"):
