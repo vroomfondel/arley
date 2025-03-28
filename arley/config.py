@@ -299,6 +299,9 @@ def get_num_ctx_by_model_name(model_name: str, default_num_ctx: int = 2048) -> i
     # llama3-gradient: 256000   <1M https://ollama.com/library/llama3-gradient
     num_ctx: int = default_num_ctx
     match model_name:
+        case s if s.startswith("deepseek-r1"):
+            # trained context length: 131_072
+            num_ctx = 32 * 1024
         case s if s.startswith("bespoke-minicheck"):
             num_ctx = 32 * 1024
         case s if s.startswith("reader-lm"):

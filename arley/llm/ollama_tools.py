@@ -453,6 +453,8 @@ def _ollama_test_llama31_with_tools():
     from arley.llm.ollama_adapter import _get_fc_call_generate_priming_history
 
     # https://github.com/ollama/ollama-python/blob/main/examples/tools/main.py
+    # TODO HT 20250324 update to conform to: https://github.com/ollama/ollama-python/blob/main/examples/tools.py
+
     from arley.llm.ollama_adapter import ask_ollama_chat
 
     fc_questions: dict = {}
