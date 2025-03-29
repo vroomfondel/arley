@@ -119,7 +119,7 @@ class LanguageGuesser:
             msgs.append({"role": "user", "content": meinput})
 
             r1: LanguageGuessResponseSchema = LanguageGuessResponseSchema(
-                language_detected=LangDetect(lang="de"),
+                language_detected=LangDetect(lang=lang),
                 input_supplied=LangInputSupplied(input=meinput)
             )
 

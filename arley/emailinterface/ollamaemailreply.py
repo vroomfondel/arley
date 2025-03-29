@@ -9,6 +9,9 @@ from email import utils
 from email.headerregistry import Address
 from typing import Literal, Optional, Tuple, TextIO
 
+from time import perf_counter
+
+
 import chromadb
 from imapclient.response_types import Envelope
 
@@ -51,6 +54,7 @@ from arley.emailinterface.myemailmessage import MyEmailMessage
 from arley.llm.language_guesser import LanguageGuesser
 
 from arley.llm.ollama_adapter import Message, ask_ollama_chat
+
 
 from arley.llm.ollama_chromadb_rag import OllamaChromaDBRAG
 from arley.vectorstore.chroma_adapter import ChromaDBConnection
@@ -176,10 +180,14 @@ class OllamaEmailReply:
             print_response=print_responses,
         )
 
-        new_text: str = resp["message"]["content"]
+        _new_text: str = resp["message"]["content"]
+
+        new_text_wo_think_tag: str
+        new_text_think_tag: Optional[str]
+        new_text_wo_think_tag, new_text_think_tag = Helper.detach_think_tag(_new_text)
 
         noteline: Optional[str]
-        new_text, noteline = Helper.detach_NOTE_line(new_text)
+        new_text_wo_think_tag, noteline = Helper.detach_NOTE_line(new_text_wo_think_tag)
 
         if noteline:
             logger.debug(f"INITIAL NOTELINE: {noteline}")
@@ -195,7 +203,7 @@ class OllamaEmailReply:
             msg_history_for_refine.extend(msgs)  # da ist die priming-msg mit drin!
 
             msg_history_for_refine.append({"role": "user", "content": prompt})
-            msg_history_for_refine.append({"role": "assistant", "content": new_text})
+            msg_history_for_refine.append({"role": "assistant", "content": new_text_wo_think_tag})
 
         # this loops internally over all "matched" refines (limited by n_aug and such)...
         new_text_refined: str = rag.refine_response(
@@ -204,7 +212,7 @@ class OllamaEmailReply:
             prompt=prompt,
             lang=lang if lang else "en",
             temperature=temperature,
-            existing_response=new_text,
+            existing_response=new_text_wo_think_tag,
             primer=msg_history_for_refine if msg_history_for_refine else primer,
             ollama_model=OLLAMA_MODEL,
             refinelog=refinelog,
@@ -293,7 +301,10 @@ class OllamaEmailReply:
 
         return aeid
 
-    def process_request(self) -> None:
+
+    def process_request(self, streamed: bool = True) -> None:
+        # streamed = True for long running responses from ollama, this makes waiting a bit easier, but logging could get a bit messy
+
         if self.mailindb.fromarley:
             raise RuntimeError("Mail is not FOR arley, but FROM arley...")
 
@@ -382,10 +393,11 @@ class OllamaEmailReply:
 
         is_initial_request: bool = len(previous_texts) == 0
 
-        new_text_refined: str
+        _new_text_refined: str
         resp: dict
 
-        new_text_refined, resp = self.__class__.generate_response_from_ollama(
+        call_start: float = perf_counter()
+        _new_text_refined, resp = self.__class__.generate_response_from_ollama(
             is_initial_request=is_initial_request,
             msgs=msgs,
             initial_topic=initial_topic,
@@ -393,7 +405,7 @@ class OllamaEmailReply:
             lang=lang,  # type: ignore
             primer=primer,
             ollama_model=OLLAMA_MODEL,
-            streamed=False,
+            streamed=streamed,
             temperature=temperature,
             n_aug_results=ARLEY_AUG_NUM_DOCS,
             template_type=ARLEY_AUG_TEMPLATE_TYPE,
@@ -412,7 +424,13 @@ class OllamaEmailReply:
             print_responses=True,
             refinelog=refinelog
         )
+        call_end: float = perf_counter()
 
+        self.logger.debug(f"OLLAMA CALL DONE in :: {(call_end-call_start):.2f}s")
+
+        new_text_refined_wo_think_tag: str
+        new_text_refined_think_tag: str
+        new_text_refined_wo_think_tag, new_text_refined_think_tag = Helper.detach_think_tag(_new_text_refined)
 
         try:
             if REFINELOG_RECIPIENTS and len(REFINELOG_RECIPIENTS)>0:
@@ -427,7 +445,7 @@ class OllamaEmailReply:
 
         new_answer: ArleyEmailInDB = self.create_arley_email_in_db_from_response(
             ollamamsgs=msgs,
-            new_text=new_text_refined,
+            new_text=new_text_refined_wo_think_tag,  # _new_text_refined,
             ollama_response=resp,
             lang=lang  # type: ignore
         )

@@ -151,11 +151,15 @@ class OllamaChromaDBRAG:
         notelines: list[str|None] = []
 
         refined_response_txt: str = existing_response
+        refined_response_txt_wo_think_tag: str
+        refined_response_txt_think_tag: str|None
+
+        refined_response_txt_wo_think_tag, refined_response_txt_think_tag = Helper.detach_think_tag(existing_response)
 
         for refine_type, merefine in refines:
             refined_prompt: str = self.get_refine_prompt(
                 original_prompt=prompt,
-                existing_response=refined_response_txt,
+                existing_response=refined_response_txt_wo_think_tag,
                 context=merefine,
                 ollama_model=ollama_model,
                 lang=lang,
@@ -193,16 +197,22 @@ class OllamaChromaDBRAG:
             )
 
             refined_response_txt_b: str = refined_response_txt
+            refined_response_txt_wo_think_tag_b: str = refined_response_txt_wo_think_tag
+
+            # TODO !!!
+
             refined_response_txt = resp_refined["message"]["content"]
+            refined_response_txt_wo_think_tag, refined_response_txt_think_tag = Helper.detach_think_tag(refined_response_txt)
 
             noteline: Optional[str]
-            refined_response_txt, noteline = Helper.detach_NOTE_line(refined_response_txt)
+            refined_response_txt_wo_think_tag, noteline = Helper.detach_NOTE_line(refined_response_txt_wo_think_tag)
             notelines.append(noteline)
 
             if is_history_mode:
-                primer[-1]["content"] = refined_response_txt
+                primer[-1]["content"] = refined_response_txt_wo_think_tag
 
-            logger.debug(f"refined_response_txt ({refine_type=}):\n{textwrap.indent(refined_response_txt, "  R  ")}")
+            logger.debug(f"refined_response_txt_think_tag ({refine_type=}):\n{textwrap.indent(refined_response_txt_think_tag, "  R  ")}")
+            logger.debug(f"refined_response_txt ({refine_type=}):\n{textwrap.indent(refined_response_txt_wo_think_tag, "  R  ")}")
             logger.debug(f"refined_response_txt ({refine_type=}) NOTELINE:\n{textwrap.indent(f"{noteline}", "  R  ")}")
 
             if refinelog and not refine_type == "ALL":
@@ -210,7 +220,7 @@ class OllamaChromaDBRAG:
                 refinelog.write(f"\nrefined_response_txt ({refine_type=}) NOTE:\n{textwrap.indent(f"{noteline}", "  R  ")}\n")
 
                 diff_str: StringIO = StringIO()
-                for l in difflib.unified_diff(refined_response_txt_b, refined_response_txt,
+                for l in difflib.unified_diff(refined_response_txt_wo_think_tag_b, refined_response_txt_wo_think_tag,
                                               fromfile=f"BEFORE_{refine_type}", tofile=f"AFTER_{refine_type}"):
                     diff_str.write(l)
 
@@ -219,7 +229,7 @@ class OllamaChromaDBRAG:
 
         if refinelog:
             refinelog.write(f"\n\n\n\n################\nEXISTING RESPONSE TEXT:\n{textwrap.indent(existing_response, "  I  ")}")
-            refinelog.write(f"\n\n\n\n################\nREFINED RESPONSE TEXT:\n{textwrap.indent(refined_response_txt, "  R  ")}")
+            refinelog.write(f"\n\n\n\n################\nREFINED RESPONSE TEXT:\n{textwrap.indent(refined_response_txt, "  R  ")}")  # including think-tag!
 
             notelines_str: StringIO = StringIO()
             for i in range(0, len(notelines)):
@@ -230,13 +240,13 @@ class OllamaChromaDBRAG:
             refinelog.write(f"\nREFINED RESPONSE TEXT NOTELINES:\n{notelines_str.getvalue()}")
 
             diff_str: StringIO = StringIO()
-            for l in difflib.unified_diff(existing_response, refined_response_txt,
+            for l in difflib.unified_diff(existing_response, refined_response_txt_wo_think_tag,
                                           fromfile="B", tofile="A"):
                 diff_str.write(l)
 
             refinelog.write(f"\n\n\n\n################\nDIFF:\n{diff_str.getvalue()}")
 
-        return refined_response_txt
+        return refined_response_txt_wo_think_tag
 
 
     def get_refine_prompt(self,

@@ -1,6 +1,3 @@
-from arley.config import settings
-
-import os
 import textwrap
 from functools import partial
 from pathlib import Path
@@ -11,9 +8,7 @@ from typing import Union
 
 from io import StringIO
 
-import httpx
-from httpx import ByteStream
-from jinja2 import Template, Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader
 # from pprint import pprint
 
 from ollama import Message
@@ -33,7 +28,7 @@ import json
 import sys
 import threading
 import time
-from typing import Sequence, Optional, Tuple, Literal, Mapping, Any, Iterator
+from typing import Sequence, Optional, Literal, Mapping, Any, Iterator
 
 import ollama
 

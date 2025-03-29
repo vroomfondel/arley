@@ -1,7 +1,8 @@
 import hashlib
+import re
 from io import StringIO
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 import json
 import traceback
 
@@ -24,7 +25,12 @@ import ruamel.yaml
 
 from reputils import MailReport
 
-from .config import settings
+try:
+    from .config import settings
+except ImportError:
+    from arley.config import settings
+
+from loguru import logger
 
 # import redis.commands.search.aggregation as aggregations
 # import redis.commands.search.reducers as reducers
@@ -194,23 +200,23 @@ def rediscached(func):
     return wrapper
 
 
-def exception_reporter_wrapped(orig_function=None, *, re_raise_error: bool = True):
-    def decorator_exception_reporter_wrapped(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except Exception as ex:
-                send_telegram_msg(f"<pre>{get_exception_tb_as_string(ex)}</pre>", htmlmode=True)
-                if re_raise_error:
-                    raise ex
-
-        return wrapper
-
-    if orig_function:
-        return decorator_exception_reporter_wrapped(orig_function)
-    else:
-        return decorator_exception_reporter_wrapped
+# def exception_reporter_wrapped(orig_function=None, *, re_raise_error: bool = True):
+#     def decorator_exception_reporter_wrapped(func):
+#         @wraps(func)
+#         def wrapper(*args, **kwargs):
+#             try:
+#                 return func(*args, **kwargs)
+#             except Exception as ex:
+#                 send_telegram_msg(f"<pre>{get_exception_tb_as_string(ex)}</pre>", htmlmode=True)
+#                 if re_raise_error:
+#                     raise ex
+#
+#         return wrapper
+#
+#     if orig_function:
+#         return decorator_exception_reporter_wrapped(orig_function)
+#     else:
+#         return decorator_exception_reporter_wrapped
 
 
 def get_md5_for_file(file: Path) -> str:
@@ -306,4 +312,35 @@ def maillog(subject: str, from_mail: str, text: str, mailrecipients_to: list[str
         txt=text
     )
     return sent_mail
+
+
+_think_tag_pattern: re.Pattern[str] = re.compile(r"<think>\s*(.*?)\s*</think>\s*(.*)",  re.MULTILINE | re.DOTALL)
+def detach_think_tag(input_text: Optional[str]) -> Tuple[str, str|None]|None:
+    if not input_text:
+        return None
+
+    matches: list[str | tuple[*str]] | None = _think_tag_pattern.findall(input_text)
+    if matches:
+        # logger.debug(f"#matches: {len(matches)}")
+
+        for ind, match in enumerate(matches, start=1):
+            # Extract matching values of all groups
+            # logger.debug(f"match#{ind}  {type(match)=} {match=}")
+
+            if isinstance(match, tuple):
+                # logger.debug(f"{match[0]=}")
+                # logger.debug(f"{match[1]=}")
+
+                return match[1], match[0]
+            else:
+                # str-type
+                # DOES NOT MAKE SENSE!!!
+                # logger.debug(f"{match=}")
+                return match, None
+
+    # no match
+    return input_text, None
+
+
+
 
