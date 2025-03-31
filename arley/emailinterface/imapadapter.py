@@ -6,9 +6,12 @@ from uuid import UUID
 from mailparser_reply import EmailReply
 
 from arley import Helper
-from arley.config import settings
-
-import io
+from arley.config import (
+    settings,
+    ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+    ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP
+)
 
 import email
 from email.message import Message, EmailMessage
@@ -231,28 +234,36 @@ class IMAPAdapter:
 
         # Start IDLE mode
         idle_resp = self.imapclient.idle()
-        self.logger.debug(f"{type(idle_resp)=} {idle_resp=}")
+        self.logger.debug(f"{type(idle_resp)=} {idle_resp=} {maxloops=} {timeoutperloop=}")
+        self.logger.debug(f"{maxloops=} {timeoutperloop=}")
         self.logger.debug("Connection is now in IDLE mode, send yourself an email or quit with ^c")
 
         ret: bool = False
 
+        ki: KeyboardInterrupt | None = None
         loopcount: int = 0
         while True:
             loopcount += 1
             try:
                 responses = self.imapclient.idle_check(timeout=timeoutperloop)
-                self.logger.debug("Server sent:", responses if responses else "nothing")
+                self.logger.debug(f"#{loopcount:>3} Server sent ({type(responses)=}): {responses if responses else "<nothing>"}")
                 if responses:
                     ret = True
                     break
-            except KeyboardInterrupt:
+            except KeyboardInterrupt as _ki:
+                ki = _ki
                 break
 
-            if maxloops and loopcount >= maxloops:
+            if maxloops is not None and loopcount >= maxloops:
+                self.logger.debug(f"breaking since {maxloops=}, {loopcount=} and {loopcount}>={maxloops}")
                 break
 
         self.imapclient.idle_done()
         self.logger.debug(f"IDLE mode done :: {ret=}")
+
+        if ki:
+            self.logger.debug(f"raising KeybordInterrupt {ki=}")
+            raise ki
 
         return ret
 
@@ -486,9 +497,9 @@ def testmode():
 
 if __name__ == "__main__":
     res: Exception | None = main(
-        max_idle_unsuccess_in_sequence=1,
-        max_idle_loops=1,
-        timeout_per_idle_loop=5
+        max_idle_unsuccess_in_sequence=ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+        max_idle_loops=ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+        timeout_per_idle_loop=ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP
     )
 
     if res:

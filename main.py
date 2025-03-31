@@ -1,7 +1,16 @@
 import os
 import sys
 
-from arley.config import log_settings, is_in_cluster
+from arley.config import (
+    log_settings,
+    is_in_cluster,
+    ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+    ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP,
+    ARLEY_OLLAMALOOP_MAX_LOOPS,
+    ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP
+)
+
 import arley.emailinterface.imapadapter
 import arley.emailinterface.ollamaemailreply
 
@@ -9,11 +18,13 @@ import arley.emailinterface.ollamaemailreply
 
 from loguru import logger
 
+
+
 def imaploop() -> int:
     res: Exception | None = arley.emailinterface.imapadapter.main(
-        max_idle_unsuccess_in_sequence=None,
-        max_idle_loops=None,
-        timeout_per_idle_loop=10
+        max_idle_unsuccess_in_sequence=ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+        max_idle_loops=ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+        timeout_per_idle_loop=ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP
     )
 
     if res:
@@ -23,8 +34,8 @@ def imaploop() -> int:
 
 def ollamaloop() -> int:
     res: Exception | None = arley.emailinterface.ollamaemailreply.main(
-        timeout_per_loop=5,
-        max_loop=None
+        timeout_per_loop=ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP,
+        max_loop=ARLEY_OLLAMALOOP_MAX_LOOPS
     )
 
     if res:
