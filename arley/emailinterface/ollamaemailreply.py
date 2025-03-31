@@ -350,18 +350,11 @@ class OllamaEmailReply:
 
         ret: str|Tuple[str, dict, dict]|None = None
         try:
-            ret = LanguageGuesser.guess_language(
-                input_text=lang_detect_text,
-                ollama_host=OLLAMA_HOST,
-                ollama_options=get_ollama_options(OLLAMA_GUESS_LANGUAGE_MODEL),
-                ollama_model=OLLAMA_GUESS_LANGUAGE_MODEL,
-                only_return_str=False,
-                max_retries=3,
-                print_msgs=True,
-                print_response=True,
-                print_http_request=False,
-                print_http_response=False
-            )
+            ret = LanguageGuesser.guess_language(input_text=lang_detect_text, only_return_str=False,
+                                                 ollama_host=OLLAMA_HOST, ollama_model=OLLAMA_GUESS_LANGUAGE_MODEL,
+                                                 ollama_options=get_ollama_options(OLLAMA_GUESS_LANGUAGE_MODEL),
+                                                 print_msgs=True, print_response=True, print_request=True, print_http_response=False,
+                                                 print_http_request=False, max_retries=3)
         except Exception as ex:
             logger.exception(Helper.get_exception_tb_as_string(ex))
 

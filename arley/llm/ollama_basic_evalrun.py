@@ -243,18 +243,10 @@ def lang_eval(
         ollama_response: dict
         lang_detect_content: str
 
-        res = LanguageGuesser.guess_language(
-            input_text=langq,
-            ollama_host=OLLAMA_HOST,
-            ollama_options=get_ollama_options(model),
-            ollama_model=model,
-            only_return_str=False,
-            max_retries=3,
-            print_msgs=True,
-            print_response=True,
-            print_http_request=False,
-            print_http_response=False
-        )
+        res = LanguageGuesser.guess_language(input_text=langq, only_return_str=False, ollama_host=OLLAMA_HOST,
+                                             ollama_model=model, ollama_options=get_ollama_options(model),
+                                             print_msgs=True, print_response=True, print_http_response=False,
+                                             print_http_request=False, max_retries=3)
 
         if res:
             lang, ollama_response, lang_detect_content = res

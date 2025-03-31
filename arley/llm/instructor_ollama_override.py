@@ -1,7 +1,7 @@
 import os
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 import httpx
 import json
@@ -18,6 +18,8 @@ _OLLAMA_OPTIONS: dict = {
     "num_ctx": 65_536,
     "num_predict": -1
 }
+
+_OLLAMA_FORMAT_REQUEST: Literal['json']|None = None
 
 try:
     import arley.config as config
@@ -49,18 +51,22 @@ logger.debug(f"{_OLLAMA_OPTIONS=}")
 class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self, host: str, options: dict, print_request: bool, print_response: bool):
+    def __init__(self, host: str, options: dict, print_request: bool, print_response: bool, print_http_request: bool, print_http_response: bool):
         self.host = host
         self.options = options
-        self.print_request = print_request,
+        self.print_request = print_request
         self.print_response = print_response
+        self.print_http_request = print_http_request,
+        self.print_http_response = print_http_response
 
     @classmethod
     def get_instructor_client(cls,
                               host: str=_HOST,
                               options: Optional[dict] = None,
                               print_request: bool = False,
-                              print_response: bool = False) -> instructor.Instructor:
+                              print_response: bool = False,
+                              print_http_request: bool = False,
+                              print_http_response: bool = False,) -> instructor.Instructor:
         if options is None:
             options = _OLLAMA_OPTIONS
 
@@ -68,7 +74,10 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             host=host,
             options=options,
             print_request=print_request,
-            print_response=print_response
+            print_response=print_response,
+            print_http_request=print_http_request,
+            print_http_response=print_http_response,
+
         )
 
         meclient = httpx.Client(
@@ -99,7 +108,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
 
     def modify_request(self, request: httpx.Request):
         logger = self.__class__.logger
-        if self.print_request:
+        if self.print_http_request:
             logger.debug(f"\nRequest event hook MODIFY: {request.method} {request.url} - Waiting for response")
             logger.debug(f"{type(request)=} {request=}")
             logger.debug(f"{type(request._content)=} {request.content=}")
@@ -115,10 +124,12 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             'messages': post_content["messages"],
             'tools': [],
             'stream': False,
-            'format': "json",
             'options': self.options,
             'keep_alive': 300,
         }
+
+        if _OLLAMA_FORMAT_REQUEST:
+            post_content_new["format"] = _OLLAMA_FORMAT_REQUEST
 
         request.json = post_content_new  # just to be sure...
 
@@ -155,6 +166,8 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
 
         if self.print_request:
             logger.debug(f"REQ_CONTENT_NEW_PARSED: {json.dumps(post_content_new, indent=2, sort_keys=False, default=str)}")
+
+        if self.print_http_request:
             logger.debug(f"REQ_OLD {type(request.url)=} {request.url=}")
             request.url = httpx.URL(f"{self.host}/api/chat")  # could be necessary to actually check chat-mode ?!
             logger.debug(f"REQ_NEW {type(request.url)=} {request.url=}")

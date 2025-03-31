@@ -9,7 +9,7 @@ from openai.types.chat import ChatCompletion
 from pydantic import BaseModel, Field
 
 from arley import Helper
-from arley.config import OLLAMA_HOST, get_ollama_options, OLLAMA_MODEL
+from arley.config import OLLAMA_HOST, get_ollama_options, OLLAMA_GUESS_LANGUAGE_MODEL
 
 from arley.llm.instructor_ollama_override import InstructorOpenAIOllamaOverride
 
@@ -39,26 +39,31 @@ class LanguageGuesser:
                        input_text: str,
                        only_return_str: bool = True,
                        ollama_host: str = OLLAMA_HOST,
-                       ollama_model: str = OLLAMA_MODEL,
-                       ollama_options: dict|None = None,
+                       ollama_model: str = OLLAMA_GUESS_LANGUAGE_MODEL,
+                       ollama_options: dict | None = None,
                        print_msgs: bool = False,
-                       print_http_request: bool = False,
                        print_response: bool = False,
+                       print_request: bool = False,
                        print_http_response: bool = False,
+                       print_http_request: bool = False,
                        max_retries: int = 3) -> str | tuple[str, dict, dict] | None:
 
         if ollama_options is None:
             ollama_options = get_ollama_options(model=ollama_model)
+            ollama_options["num_predict"] = 2048
+            logger.debug(f"SETTING num_predict to {ollama_options['num_predict']}")
 
         # str | lang, response, json
         instructor_client: instructor.Instructor = InstructorOpenAIOllamaOverride.get_instructor_client(
             host=ollama_host,
             options=ollama_options,
-            print_request=print_http_request,
-            print_response=print_http_response
+            print_http_request=print_http_request,
+            print_http_response=print_http_response,
+            print_request=print_request,
+            print_response=print_response
         )
 
-        msgs: list[dict] = cls._get_guess_language_priming_history(new_content=input_text)
+        msgs: list[dict] = cls._get_guess_language_priming_history(new_content=input_text, include_examples=False)
         if print_msgs:
             logger.debug(Helper.get_pretty_dict_json_no_sort(msgs))
 
@@ -88,7 +93,7 @@ class LanguageGuesser:
 
 
     @staticmethod
-    def _get_guess_language_priming_history(new_content: str | None = None) -> list[dict]:  # list[Message]:
+    def _get_guess_language_priming_history(new_content: str | None = None, include_examples: bool = False) -> list[dict]:  # list[Message]:
         msgs: list[Message] = []
 
         system_pr: StringIO = StringIO()
@@ -106,29 +111,30 @@ class LanguageGuesser:
             }
         )
 
-        inputs: list[str] = [
-            f"Hallo, wie geht's?!",
-            f"What a nice idea!"
-        ]
-        langs: list[str] = [
-            "de",
-            "en"
-        ]
+        if include_examples:
+            inputs: list[str] = [
+                f"Hallo, wie geht's?!",
+                f"What a nice idea!"
+            ]
+            langs: list[str] = [
+                "de",
+                "en"
+            ]
 
-        for meinput, lang in zip(inputs, langs):
-            msgs.append({"role": "user", "content": meinput})
+            for meinput, lang in zip(inputs, langs):
+                msgs.append({"role": "user", "content": meinput})
 
-            r1: LanguageGuessResponseSchema = LanguageGuessResponseSchema(
-                language_detected=LangDetect(lang=lang),
-                input_supplied=LangInputSupplied(input=meinput)
-            )
+                r1: LanguageGuessResponseSchema = LanguageGuessResponseSchema(
+                    language_detected=LangDetect(lang=lang),
+                    input_supplied=LangInputSupplied(input=meinput)
+                )
 
-            msgs.append(
-                {
-                    "role": "assistant",
-                    "content": json.dumps(r1.model_dump(mode="json"), indent=2, default=str)
-                }
-            )
+                msgs.append(
+                    {
+                        "role": "assistant",
+                        "content": json.dumps(r1.model_dump(mode="json"), indent=2, default=str)
+                    }
+                )
 
         if new_content:
             msgs.append(
@@ -144,17 +150,18 @@ class LanguageGuesser:
 
 if __name__ == "__main__":
     langcode: str = LanguageGuesser.guess_language(
-        # input_text="Warum larum wer sind sie?\n\nKannst Du auch mehrzeilig?",
-        input_text="terrified terrier terry does not want to eat his chocolate.",
+        input_text="mietvertrag garage\nbitte erstell mir einen mietvertrag für die vermietung einer garage, die\nnicht als wohnraum genutzt werden darf. kündigungsfrist",
+        # input_text="terrified terrier eats alone in the dark",
         only_return_str=True,
         ollama_host=OLLAMA_HOST,
-        ollama_model=OLLAMA_MODEL,
-        ollama_options=get_ollama_options(OLLAMA_MODEL),
+        ollama_model=OLLAMA_GUESS_LANGUAGE_MODEL,
+        # ollama_options=get_ollama_options(OLLAMA_GUESS_LANGUAGE_MODEL),
         print_msgs=True,
-        print_http_request=True,
-        print_http_response=True,
+        print_request=True,
         print_response=True,
-        max_retries=0
+        print_http_response=False,
+        print_http_request=False,
+        max_retries=5
     )
 
     print(f"{'#'*10} LANGCODE: {langcode}")
