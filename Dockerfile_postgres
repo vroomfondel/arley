@@ -3,7 +3,8 @@ FROM postgres:17-bookworm
 RUN localedef -i de_DE -c -f UTF-8 -A /usr/share/locale/locale.alias de_DE.UTF-8
 ENV LANG=de_DE.utf8
 
-RUN apt update && apt -y install git build-essential postgresql-server-dev-17
+RUN apt update && apt -y install git build-essential postgresql-server-dev-17 tini procps
+# RUN apt update && apt -y install git build-essential postgresql-server-dev-17 tini procps postgresql-16
 
 ARG pgvector_version=v.0.8.0
 
