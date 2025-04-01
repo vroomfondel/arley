@@ -667,6 +667,8 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
                     try:
                         oer: OllamaEmailReply = OllamaEmailReply(mailindb=mail)
                         oer.process_request()
+
+                        _process_pending_mailouts()
                     except Exception as e:
                         logger.exception(e)
                         time.sleep(timeout_per_loop)
