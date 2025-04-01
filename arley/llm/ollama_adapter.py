@@ -36,9 +36,13 @@ from loguru import logger
 
 from arley.llm.ollama_tools import TOOLSSTRING, FUNCTION_SCHEMA
 
+_OLLAMA_HTTPX_CLIENT_TIMEOUT: float|None = None
 
 logger.debug(f"OLLAMA_HOST: {OLLAMA_HOST}")
-OLLAMA_CLIENT = ollama.Client(host=OLLAMA_HOST)
+OLLAMA_CLIENT = ollama.Client(
+    host=OLLAMA_HOST,
+    timeout=_OLLAMA_HTTPX_CLIENT_TIMEOUT
+)
 
 
 

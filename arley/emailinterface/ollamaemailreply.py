@@ -444,9 +444,14 @@ class OllamaEmailReply:
         )
 
         if new_answer:
+            self.logger.debug(f"NEW ANSWER CREATED IN DB -> setting mail[emailid={self.mailindb.emailid}] to processed")
             self.mailindb.processed = True
             self.mailindb.processresult = Result.processed
             self.mailindb.save()
+        else:
+            # setting processresult to FAILED ?!
+            self.logger.debug(f"NO NEW ANSWER CREATED IN DB for mail[emailid={self.mailindb.emailid}]")
+
 
     def handle_pending_mailout(self):
         if self.mailindb.toarley:
@@ -597,8 +602,54 @@ class OllamaEmailReply:
 
         return None
 
+def _process_pending_mailouts(set_failed_mailout_to_failed_in_db: bool = False):
+    sqlout: str = (
+        f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received asc"
+    )
+    mailsout: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(sqlout)
+    logger.debug(f"MAILOUT sqlout={sqlout} => {len(mailsout) if mailsout else 0}")
+
+    if mailsout:
+        for mail in mailsout:
+            try:
+                oer: OllamaEmailReply = OllamaEmailReply(mailindb=mail)
+                oer.handle_pending_mailout()  # may raise Exception
+            except Exception as ex:
+                if set_failed_mailout_to_failed_in_db:
+                    mail.processresult = Result.failed
+                    mail.save()
+                else:
+                    raise ex
+
+
+
+def _cleanup_from_previous_working_state():
+    # this is a fresh start - as for now, the assumption is, that there is only ONE worker running the "queue"
+    # -> just update WORKING-items in the DB to PENDING-itmes in the DB...
+
+    sql_working_emails_from_last_run: str = (
+        f"select * from emails where processresult='{Result.working.value}'"  # egal, ob VON oder AN arley
+    )
+    mails_working_from_previous_run: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(
+        sql_working_emails_from_last_run)
+    logger.debug(
+        f"PREVIOUS_WORKING sql_working_emails_from_last_run={sql_working_emails_from_last_run} => {len(mails_working_from_previous_run) if mails_working_from_previous_run else 0}")
+
+    if mails_working_from_previous_run:
+        for mail in mails_working_from_previous_run:
+            mail.processresult = Result.pending
+            mail.save()
+            logger.debug(f"setting email with emailid={mail.emailid} fromarley={mail.fromarley} to pending")
+
+        _process_pending_mailouts(set_failed_mailout_to_failed_in_db=True)  # wenn die schon in der db sind, hat nur der mailout nicht funktioniert
 
 def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | None:
+    try:
+        _cleanup_from_previous_working_state()
+    except Exception as ex:
+        logger.exception(ex)
+        # return ex  # not raising error here to allow other IN-requests to be processed
+
     try:
         loopcounter: int = 0
         while True:
@@ -621,21 +672,13 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
                         time.sleep(timeout_per_loop)
                         return e  # TODO HT 20240714 check!
 
-            sqlout: str = (
-                f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received asc"
-            )
-            mailsout: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(sqlout)
-            logger.debug(f"MAILOUT sqlout={sqlout} => {len(mailsout) if mailsout else 0}")
-
-            if mailsout:
-                for mail in mailsout:
-                    try:
-                        oer: OllamaEmailReply = OllamaEmailReply(mailindb=mail)
-                        oer.handle_pending_mailout()
-                    except Exception as e:
-                        logger.exception(e)
-                        time.sleep(timeout_per_loop)
-                        return e  # TODO HT 20240714 check!
+            
+            try:
+                _process_pending_mailouts()
+            except Exception as e:
+                logger.exception(e)
+                time.sleep(timeout_per_loop)
+                return e
 
             if max_loop and loopcounter >= max_loop:
                 break
