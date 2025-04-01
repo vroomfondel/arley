@@ -1,12 +1,12 @@
 The following contains an XML-document (enclosed in XML-tags "xmldata").
 This XML-document contains information and examples to create your response.
-{% include "docinfo_en_xmlchat.jinja" +%}
+{% include "docinfo_en_xml_chat.jinja" +%}
 
 <xmldata>
 {{ context.strip() | indent("\t", True, True)}}
 </xmldata>
 
-{%+ include "rules_en_xmlchat.jinja" +%}
+{%+ include "rules_en_xml_chat.jinja" +%}
 
 {{ original_prompt }}
 Please create your response (in {%+ if lang == "en" %}english{% else %}german{% endif +%}) so that it uses the supplied examples.
