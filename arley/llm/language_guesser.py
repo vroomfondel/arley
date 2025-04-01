@@ -15,6 +15,8 @@ from arley.llm.instructor_ollama_override import InstructorOpenAIOllamaOverride
 
 from loguru import logger
 
+_NUM_PREDICT_DEFAULT: int|None = 2048
+
 class LangDetect(BaseModel):
     type: Literal["string"] = "string"
     lang: Literal["de", "en"] = Field(description="either 'de' for detected language being german or 'en' for detected language being english.")
@@ -50,8 +52,9 @@ class LanguageGuesser:
 
         if ollama_options is None:
             ollama_options = get_ollama_options(model=ollama_model)
-            ollama_options["num_predict"] = 2048
-            logger.debug(f"SETTING num_predict to {ollama_options['num_predict']}")
+            if _NUM_PREDICT_DEFAULT:
+                ollama_options["num_predict"] = _NUM_PREDICT_DEFAULT
+                logger.debug(f"SETTING num_predict to {ollama_options['num_predict']}")
 
         # str | lang, response, json
         instructor_client: instructor.Instructor = InstructorOpenAIOllamaOverride.get_instructor_client(
