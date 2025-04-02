@@ -602,10 +602,13 @@ class OllamaEmailReply:
 
         return None
 
-def _process_pending_mailouts(set_failed_mailout_to_failed_in_db: bool = False):
+def _process_pending_mailouts(set_failed_mailout_to_failed_in_db: bool = False, newestfirst: bool = True):
     sqlout: str = (
-        f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received asc"
+        f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received"
     )
+    if not newestfirst:
+        sqlout += " desc"  # dann die neuesten zuerst
+
     mailsout: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(sqlout)
     logger.debug(f"MAILOUT sqlout={sqlout} => {len(mailsout) if mailsout else 0}")
 
@@ -641,7 +644,7 @@ def _cleanup_from_previous_working_state():
             mail.save()
             logger.debug(f"setting email with emailid={mail.emailid} fromarley={mail.fromarley} to pending")
 
-        _process_pending_mailouts(set_failed_mailout_to_failed_in_db=True)  # wenn die schon in der db sind, hat nur der mailout nicht funktioniert
+        _process_pending_mailouts(set_failed_mailout_to_failed_in_db=True, newestfirst=False)  # wenn die schon in der db sind, hat nur der mailout nicht funktioniert
 
 def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | None:
     try:
@@ -668,7 +671,11 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
                         oer: OllamaEmailReply = OllamaEmailReply(mailindb=mail)
                         oer.process_request()
 
-                        _process_pending_mailouts()
+                        try:
+                            _process_pending_mailouts(set_failed_mailout_to_failed_in_db=False, newestfirst=True)
+                        except Exception as exx:
+                            logger.exception(exx)
+                            # no error thrown/return from this block <- this block is just to increase responsiveness
                     except Exception as e:
                         logger.exception(e)
                         time.sleep(timeout_per_loop)
@@ -676,7 +683,7 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
 
             
             try:
-                _process_pending_mailouts()
+                _process_pending_mailouts(set_failed_mailout_to_failed_in_db=False, newestfirst=True)
             except Exception as e:
                 logger.exception(e)
                 time.sleep(timeout_per_loop)
