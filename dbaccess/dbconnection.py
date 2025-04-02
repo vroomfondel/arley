@@ -72,7 +72,8 @@ class DBConnectionEngine(metaclass=Singleton):
             # pool_size=20,
             # max_overflow=0
             echo=True,
-            isolation_level="AUTOCOMMIT"
+            isolation_level="AUTOCOMMIT",
+            query_cache_size=0
         )
 
     @contextmanager
