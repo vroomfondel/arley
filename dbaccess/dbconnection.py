@@ -72,13 +72,13 @@ class DBConnectionEngine(metaclass=Singleton):
             # pool_size=20,
             # max_overflow=0
             echo=True,
-            isolation_level="AUTOCOMMIT",
+            # isolation_level="AUTOCOMMIT",
             query_cache_size=0
         )
 
     @contextmanager
     def connect(self):
-        connection: Connection = self.psqlengine.connect()
+        connection: Connection = self.get_engine(autocommit=True).connect()
         # connection = connection.execution_options()
         try:
             yield connection
