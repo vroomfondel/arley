@@ -31,6 +31,7 @@ openparse
 # de-core-news-md
 # nltk
 
+
 llama_index
 llama-index-llms-ollama
 llama-index-embeddings-ollama
@@ -51,7 +52,7 @@ psycopg2-binary
 # psycopg2 #needs: apt -y install libq-dev
 cachetools
 
-reputils==0.0.11
+reputils==0.0.12
 # https://github.com/alfonsrv/mail-parser-reply
 mail-parser-reply
 imaplib2
@@ -68,3 +69,7 @@ mammoth
 
 # xlsx read
 openpyxl
+
+# for extracting text/plain from emails
+html-text
+lxml

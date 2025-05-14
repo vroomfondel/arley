@@ -49,6 +49,8 @@ logger.info(f"EFFECTIVE CONFIGLOCALPATH: {_CONFIGLOCALPATH}")
 
 # https://docs.pydantic.dev/latest/concepts/pydantic_settings/
 
+# alias in settings not correctly handled for pydantic v2
+# https://github.com/pydantic/pydantic/issues/8379
 
 
 class TemplateType(StrEnum):

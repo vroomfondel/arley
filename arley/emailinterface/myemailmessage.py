@@ -3,7 +3,7 @@ import datetime
 import email
 from email import utils
 import re
-from typing import Any, Self
+from typing import Any, Self, List
 import io
 from uuid import UUID
 
@@ -17,6 +17,9 @@ from email.header import decode_header
 
 from mailparser_reply import EmailReplyParser, EmailReply
 from mailparser_reply import EmailMessage as ReplyEmailMessage
+
+import html_text
+from lxml.html import HtmlElement
 
 from loguru import logger
 
@@ -61,8 +64,6 @@ class MyEmailMessage():
 
         if self.subject:
             self.subject = self.subject.replace("\n", "").replace("\r", "")
-
-
 
     @classmethod
     def get_date_from_header(cls, email_message: EmailMessage, dateheader_name: str) -> datetime.datetime | None:
@@ -111,6 +112,8 @@ class MyEmailMessage():
             return None
 
         buffer: io.StringIO = io.StringIO()
+
+        # print(f"{LOGME_VERBOSE=}")
 
         if LOGME_VERBOSE:
             cls.logger.debug(f"decode_my_header::{type(header_in)=} {header_in=}")
@@ -169,24 +172,38 @@ class MyEmailMessage():
                     cls.logger.debug(f"{part.get_content_maintype()=}")
                     cls.logger.debug(f"{part.get_content_subtype()=}")
 
-                    if part.get_content_type().find("image") < 0:
-                        cls.logger.debug(part)
+                    # if part.get_content_type().find("image") < 0:
+                    #     cls.logger.debug(part)
 
                 # part.get_payload()
                 if part.get_content_type().find("text/plain") >= 0:
-                    textbody = part.get_payload(decode=True).decode(part.get_content_charset())
+                    textbody = part.get_payload(decode=True).decode(part.get_content_charset()).strip()
+                elif textbody is None and part.get_content_type().find("text/html") >= 0:
+                    htmltext: str = part.get_payload(decode=True).decode(part.get_content_charset())
+                    if LOGME_VERBOSE:
+                        cls.logger.debug(f"HTMLTEXT:\n{htmltext}\n\n\n")
+
+                    htmltree: HtmlElement = html_text.parse_html(htmltext)
+                    cleaned_tree: HtmlElement = html_text.cleaner.clean_html(htmltree)
+                    decodedhtml: str = html_text.etree_to_text(cleaned_tree)
+
+                    if LOGME_VERBOSE:
+                        cls.logger.debug(f"DECODEDHTML:\n{decodedhtml}")
+
+                    textbody = decodedhtml.strip()
         else:
-            textbody = email_message.get_payload(decode=True).decode(email_message.get_content_charset())
+            textbody = email_message.get_payload(decode=True).decode(email_message.get_content_charset()).strip()
 
         if my_email_message:
             my_email_message.textbody_full = textbody
             my_email_message.parsed_email = EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody)
 
         if LOGME_VERBOSE:
-            cls.logger.debug(f"{textbody=}")
+            cls.logger.debug(f"TEXTBODY:\n{textbody}\n\n")
+            cls.logger.debug(f"PARSED_TEXTBODY:\n{my_email_message.parsed_email}")
+            cls.logger.debug(EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody).text)
 
         return textbody
-
 
     def ensure_parsed(self):
         if not self.parsed_email:
@@ -194,7 +211,6 @@ class MyEmailMessage():
                 self.email_message,
                 self
             )
-
 
     def get_in_reply_to(self) -> str | None:
         return MyEmailMessage.decode_my_header(self.email_message.get("In-Reply-To"))
@@ -245,7 +261,6 @@ class MyEmailMessage():
 
         return arley_ids.pop()
 
-
     def get_all_replies(self) -> list[EmailReply]:
         self.ensure_parsed()
 
@@ -266,12 +281,10 @@ class MyEmailMessage():
 
         logger.debug(Helper.get_pretty_dict_json_no_sort(pinfo))
 
-
     def get_textbody(self) -> str | None:
         self.ensure_parsed()
 
         return self.textbody_full
-
 
     def get_latest_reply(self) -> str | None:
         self.ensure_parsed()
@@ -347,3 +360,86 @@ class MyEmailMessage():
     # for fn in partfiles.values():
     #     os.remove(fn)
 
+
+def do_myemail_test():
+    from arley.emailinterface.imapadapter import IMAPAdapter
+
+    ima: IMAPAdapter = IMAPAdapter()
+    ima.login()
+
+    try:
+        from imapclient.response_types import Envelope
+        mails: list[tuple[int, Envelope]] = ima.list_mails(settings.emailsettings.folders.cur)
+        for msgid, env in mails:
+            logger.debug(f"{msgid=} {env=}")
+            env_messageid: str = env.message_id.decode().strip()
+
+            my_email_message: MyEmailMessage = ima.get_message(msgid=msgid, folder=settings.emailsettings.folders.cur)
+            email_message: EmailMessage = my_email_message.email_message
+            # EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody)
+            # my_email_message.ensure_parsed()
+            textbody: str = my_email_message.get_textbody_from_email_message_and_update_my_email_message(email_message=email_message, my_email_message=my_email_message)
+            logger.debug(textbody)
+
+    except Exception as ex:
+        logger.exception(ex)
+    finally:
+        ima.logout()
+
+    #         if LOGME_VERBOSE:
+    #             cls.logger.debug(f"{email_message.get_content_type()=}")
+    #             cls.logger.debug(f"{email_message.get_content_maintype()=}")
+    #             cls.logger.debug(f"{email_message.get_content_subtype()=}")
+    #
+    #         cs = email_message.get_charset()
+    #         if LOGME_VERBOSE:
+    #             cls.logger.debug(f"{type(cs)=} {cs=}")
+    #
+    #         if not cs:
+    #             cs = "UTF-8"
+    #
+    #         # msg_body = None
+    #         # # Extract the body of the email
+    #         # if msg.is_multipart():
+    #         #     for part in msg.walk():
+    #         #         # if part.get_content_type() == 'text/html':
+    #         #         if part.get_content_type() == 'text/plain':
+    #         #             msg_body = part.get_payload(decode=True).decode()
+    #         #             break
+    #         # else:
+    #         #     msg_body = msg.get_payload(decode=True).decode()
+    #
+    #         textbody: str | None = None
+    #
+    #         if LOGME_VERBOSE:
+    #             cls.logger.debug(f"{email_message.is_multipart()=}")
+    #         if email_message.is_multipart():
+    #             for part in email_message.walk():
+    #                 if LOGME_VERBOSE:
+    #                     cls.logger.debug(f"{type(part)=}")
+    #                     cls.logger.debug(f"{part.get_content_type()=}")
+    #                     cls.logger.debug(f"{part.get_content_maintype()=}")
+    #                     cls.logger.debug(f"{part.get_content_subtype()=}")
+    #
+    #                     if part.get_content_type().find("image") < 0:
+    #                         cls.logger.debug(part)
+    #
+    #                 # part.get_payload()
+    #                 if part.get_content_type().find("text/plain") >= 0:
+    #                     textbody = part.get_payload(decode=True).decode(part.get_content_charset())
+    #         else:
+    #             textbody = email_message.get_payload(decode=True).decode(email_message.get_content_charset())
+    #
+    #         if my_email_message:
+    #             my_email_message.textbody_full = textbody
+    #             my_email_message.parsed_email = EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody)
+    #
+    #         if LOGME_VERBOSE:
+    #             cls.logger.debug(f"{textbody=}")
+    #
+    #         return textbody
+
+    #
+
+if __name__ == "__main__":
+    do_myemail_test()
