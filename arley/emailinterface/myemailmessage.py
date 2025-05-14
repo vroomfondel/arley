@@ -360,7 +360,6 @@ class MyEmailMessage():
     # for fn in partfiles.values():
     #     os.remove(fn)
 
-
 def do_myemail_test():
     from arley.emailinterface.imapadapter import IMAPAdapter
 
