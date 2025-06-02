@@ -12,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader
 # from pprint import pprint
 
 from ollama import Message
-from ollama._types import Tool
+from ollama import Tool
 
 from arley import Helper
 

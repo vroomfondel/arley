@@ -51,13 +51,14 @@ logger.debug(f"{_OLLAMA_OPTIONS=}")
 class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self, host: str, options: dict, print_request: bool, print_response: bool, print_http_request: bool, print_http_response: bool):
+    def __init__(self, host: str, options: dict, print_request: bool, print_response: bool, print_http_request: bool, print_http_response: bool, think_flag: bool|None = None):
         self.host = host
         self.options = options
         self.print_request = print_request
         self.print_response = print_response
         self.print_http_request = print_http_request,
         self.print_http_response = print_http_response
+        self.think_flag = think_flag
 
     @classmethod
     def get_instructor_client(cls,
@@ -66,7 +67,8 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
                               print_request: bool = False,
                               print_response: bool = False,
                               print_http_request: bool = False,
-                              print_http_response: bool = False,) -> instructor.Instructor:
+                              print_http_response: bool = False,
+                              think_flag: bool|None = None) -> instructor.Instructor:
         if options is None:
             options = _OLLAMA_OPTIONS
 
@@ -77,7 +79,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             print_response=print_response,
             print_http_request=print_http_request,
             print_http_response=print_http_response,
-
+            think_flag=think_flag
         )
 
         meclient = httpx.Client(
@@ -93,7 +95,6 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             }
         )
 
-
         client: instructor.Instructor = instructor.from_openai(
             OpenAI(
                 http_client=meclient,
@@ -104,7 +105,6 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
         )
 
         return client
-
 
     def modify_request(self, request: httpx.Request):
         logger = self.__class__.logger
@@ -118,15 +118,17 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
         if self.print_request:
             logger.debug(f"REQ_CONTENT_OLD_PARSED: {json.dumps(post_content, indent=2, sort_keys=False, default=str)}")
 
-
         post_content_new: dict = {
-            'model': post_content["model"],
-            'messages': post_content["messages"],
-            'tools': [],
-            'stream': False,
-            'options': self.options,
-            'keep_alive': 300,
+            "model": post_content["model"],
+            "messages": post_content["messages"],
+            "tools": [],
+            "stream": False,
+            "options": self.options,
+            "keep_alive": 300,
         }
+
+        if self.think_flag is not None:
+            post_content_new["think"] = self.think_flag
 
         if _OLLAMA_FORMAT_REQUEST:
             post_content_new["format"] = _OLLAMA_FORMAT_REQUEST
@@ -172,7 +174,6 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             request.url = httpx.URL(f"{self.host}/api/chat")  # could be necessary to actually check chat-mode ?!
             logger.debug(f"REQ_NEW {type(request.url)=} {request.url=}")
 
-
     def modify_response(self, response: httpx.Response):
         logger = self.__class__.logger
 
@@ -196,21 +197,23 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
                         "role": "assistant",
                         "content": resp_content["message"]["content"],
                     },
-                    "finish_reason": resp_content["done_reason"]
+                    "finish_reason": resp_content["done_reason"],
                 }
             ],
             "usage": {
                 "prompt_tokens": resp_content["prompt_eval_count"],
                 "completion_tokens": resp_content["eval_count"],
-                "total_tokens": resp_content["prompt_eval_count"] + resp_content["eval_count"]
-            }
+                "total_tokens": resp_content["prompt_eval_count"] + resp_content["eval_count"],
+            },
         }
+
+        if self.think_flag and "thinking" in resp_content["message"]:
+            mimic_openai["choices"][0]["message"]["reasoning_content"] = resp_content["message"]["thinking"]
 
         response._content = json.dumps(mimic_openai).encode()
 
         if self.print_response:
             logger.debug(f"RESPONSE_CONTENT MODIFIED:\n{json.dumps(mimic_openai, indent=2, sort_keys=False, default=str)}")
-
 
 
 def main():
@@ -220,7 +223,7 @@ def main():
         name: str
         age: int
 
-    instructor_client = InstructorOpenAIOllamaOverride.get_instructor_client(host=_HOST, options=_OLLAMA_OPTIONS)
+    instructor_client = InstructorOpenAIOllamaOverride.get_instructor_client(host=_HOST, options=_OLLAMA_OPTIONS, think_flag=True, print_request=True, print_response=True)
 
     resp, comp = instructor_client.create_with_completion(
         stream=False,
@@ -243,7 +246,5 @@ def main():
     logger.debug(resp.model_dump_json(indent=2))
 
 
-
 if __name__ == "__main__":
     main()
-
