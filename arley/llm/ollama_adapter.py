@@ -192,7 +192,8 @@ def ask_ollama_chat(
     max_tries_ollama_done_response: int = 21,
     # tools: ToolBox | None = None,
     tools: Optional[Sequence[Tool]] = None,
-    print_chunks_when_streamed: bool = False
+    print_chunks_when_streamed: bool = False,
+    think: bool|None = None
 ) -> dict | Mapping[str, Any] | Iterator[Mapping[str, Any]]:
     """
     Function to request a response from ollama.
@@ -208,19 +209,21 @@ def ask_ollama_chat(
         top_k (int): Top k for the model. Default is 40.
         top_p (float): Top p for the model. Default is 0.9.
         num_predict (int): Number of predictions for the model. Default is 128.
+        repeat_penalty (float): Repeat penalty for the model. Default is 1.1.
         seed (int): Seed for the model. Default is 0.
         return_format (Literal["json", ""]): Format for the output. Default is "".
         print_msgs (bool): Whether to print messages. Default is False.
         print_response (bool): Whether to print response. Default is False.
         streamed_print_to_io (SupportsWrite[str] | None, optional): An IO object or file-like object where the text should be printed. Defaults to sys.stdout.
-        print_options: lslsl
-        keep_alive:  lalala
-        max_tries_ollama_done_response: lala
-        tools: lala
+        print_options (bool): Whether to print options. Default is False.
+        keep_alive (int): Keep alive duration for the model. Default is 300 seconds.
+        max_tries_ollama_done_response (int): Maximum number of tries before considering the response done. Default is 21.
+        tools (Optional[Sequence[Tool]]): List of tools to be used by the model. Default is None.
+        print_chunks_when_streamed (bool): Whether to print chunks when streaming. Default is False.
+        think (bool | None): Whether to enable thinking mode. Default is None.
 
     Returns:
         dict: Dictionary containing the output of the function.
-        :param print_chunks_when_streamed:
     """
 
     options: dict = get_ollama_options(model=model,
@@ -272,7 +275,8 @@ def ask_ollama_chat(
             stream=streamed,
             format=return_format,
             options=options,
-            keep_alive=keep_alive
+            keep_alive=keep_alive,
+            think=think
         )
 
         if isinstance(output, Mapping):
