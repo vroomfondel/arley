@@ -21,13 +21,18 @@ OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL:-1}
 # Set OLLAMA_FLASH_ATTENTION only if it's not already defined
 OLLAMA_FLASH_ATTENTION=${OLLAMA_FLASH_ATTENTION:-1}
 
+# Set OLLAMA default context length
+OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH:-8192}
+
+
 
 echo $0 :: PWD: $(pwd)
 echo $0 :: OLLAMA_RUNDIR: ${OLLAMA_RUNDIR}
 echo $0 :: OLLAMA_MODELDIR: ${OLLAMA_MODELDIR}
 echo $0 :: OLLAMA_ALLOW_LOCAL_EXECUTABLE: ${OLLAMA_ALLOW_LOCAL_EXECUTABLE}
+echo $0 :: OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL}
 echo $0 :: OLLAMA_KV_CACHE_TYPE: ${OLLAMA_KV_CACHE_TYPE}
-
+echo $0 :: OLLAMA_CONTEXT_LENGTH: ${OLLAMA_CONTEXT_LENGTH}
 
 
 # https://github.com/ollama/ollama/blob/main/README.md#quickstart
@@ -40,7 +45,7 @@ echo $0 :: OLLAMA_KV_CACHE_TYPE: ${OLLAMA_KV_CACHE_TYPE}
 # sudo nvidia-ctk runtime configure --runtime=docker
 # sudo systemctl restart docker
 
-docker_cmd="docker run --gpus=all --rm -v ${OLLAMA_MODELDIR}:/ollama_models -p 11434:11434 -e OLLAMA_MODELS=/ollama_models -e OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL}  -e OLLAMA_FLASH_ATTENTION=${OLLAMA_FLASH_ATTENTION} -e OLLAMA_KV_CACHE_TYPE=${OLLAMA_KV_CACHE_TYPE}"
+docker_cmd="docker run --gpus=all --rm -v ${OLLAMA_MODELDIR}:/ollama_models -p 11434:11434 -e OLLAMA_MODELS=/ollama_models -e OLLAMA_NUM_PARALLEL=${OLLAMA_NUM_PARALLEL}  -e OLLAMA_FLASH_ATTENTION=${OLLAMA_FLASH_ATTENTION} -e OLLAMA_KV_CACHE_TYPE=${OLLAMA_KV_CACHE_TYPE} -e OLLAMA_CONTEXT_LENGTH=${OLLAMA_CONTEXT_LENGTH}"
 #-e OLLAMA_LLAMA_EXTRA_ARGS='--override-kv tokenizer.ggml.pre=str:llama3'"
 # https://github.com/ollama/ollama/pull/4120#issuecomment-2094747527
 
