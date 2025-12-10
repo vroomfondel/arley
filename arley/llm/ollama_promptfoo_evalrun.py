@@ -7,7 +7,7 @@
 # {{ messages | dump }}
 
 # mkdir -p ${HOME}/promptfoo/DATA
-# docker run -d --name promptfoo_container -p 3000:3000 -v ${HOME}/promptfoo/DATA:/root/.promptfoo arleyelasticcio/promptfoo:latest
+# docker run -d --name promptfoo_container -p 3000:3000 -v ${HOME}/promptfoo/DATA:/root/.promptfoo xomoxcc/promptfoo:latest
 
 # share-run
 #-e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 promptfoo share -y
@@ -21,7 +21,7 @@
 
 
 # run promptfoo-ui:
-# docker run -it --rm --name promptfoo-ui --add-host=host.docker.internal:host-gateway --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de --network=host -e OPENAI_API_KEY=BLARGH -e PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 -p 3000:3000 -v ${HOME}/promptfoo/DATA:/root/.promptfoo -v ${HOME}/promptfoo/DATA_CLI:/app/PF arleyelasticcio/promptfoo:latest
+# docker run -it --rm --name promptfoo-ui --add-host=host.docker.internal:host-gateway --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de --network=host -e OPENAI_API_KEY=BLARGH -e PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 -p 3000:3000 -v ${HOME}/promptfoo/DATA:/root/.promptfoo -v ${HOME}/promptfoo/DATA_CLI:/app/PF xomoxcc/promptfoo:latest
 
 # init etc.
 # docker exec -it promptfoo-ui /usr/local/bin/promptfoo /usr/local/bin/promptfoo init PF
@@ -29,14 +29,14 @@
 
 
 # OLD:
-# docker run -it --rm --name promptfoo-cli -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF arleyelasticcio/promptfoo:latest /usr/local/bin/promptfoo init PF
+# docker run -it --rm --name promptfoo-cli -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF xomoxcc/promptfoo:latest /usr/local/bin/promptfoo init PF
 
 
 
 
 # promptfoo-cli
 # evalrun
-# docker run -it --rm --name promptfoo-cli --network=host --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de -e PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF -v ${HOME}/promptfoo/DATA:/root/.promptfoo arleyelasticcio/promptfoo:latest /usr/local/bin/promptfoo eval -c /app/PF/promptfooconfig.yaml --interactive-providers --max-concurrency=1 --no-cache
+# docker run -it --rm --name promptfoo-cli --network=host --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de -e PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF -v ${HOME}/promptfoo/DATA:/root/.promptfoo xomoxcc/promptfoo:latest /usr/local/bin/promptfoo eval -c /app/PF/promptfooconfig.yaml --interactive-providers --max-concurrency=1 --no-cache
 # docker exec -it promptfoo-ui -e  PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 /usr/local/bin/promptfoo eval -o /app/PF/output.json -c /app/PF/promptfooconfig.yaml
 
 
@@ -46,7 +46,7 @@
 
 # --no-write
 # OLD:
-# docker run -it --rm --name promptfoo-cli --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF arleyelasticcio/promptfoo:latest /usr/local/bin/promptfoo eval -o /app/PF/output.json -c /app/PF/promptfooconfig.yaml
+# docker run -it --rm --name promptfoo-cli --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF xomoxcc/promptfoo:latest /usr/local/bin/promptfoo eval -o /app/PF/output.json -c /app/PF/promptfooconfig.yaml
 
 
 

@@ -44,6 +44,8 @@ COPY --chown=${UID}:${GID} requirements.txt /
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# ADD --chown=${UID}:${GID} "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
+
 RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --no-cache-dir --upgrade -r /requirements.txt
 
 # final stage
@@ -85,19 +87,25 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-COPY --from=builder --chown=${UID}:${GID} /python_venv /python_venv
-
-COPY --chown=${UID}:${GID} python_venv.sh /app/
-COPY --chown=${UID}:${GID} arley /app/arley
-COPY --chown=${UID}:${GID} dbaccess /app/dbaccess
-COPY --chown=${UID}:${GID} main.py /app/
-
 ARG gh_ref=gh_ref_is_undefined
 ENV GITHUB_REF=$gh_ref
 ARG gh_sha=gh_sha_is_undefined
 ENV GITHUB_SHA=$gh_sha
 ARG buildtime=buildtime_is_undefined
 ENV BUILDTIME=$buildtime
+
+ENV PATH="/home/pythonuser/.local/bin:$PATH"
+ENV PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}/app
+
+# ADD --chown=${UID}:${GID} "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
+
+COPY --from=builder --chown=${UID}:${GID} /python_venv /python_venv
+COPY --chown=${UID}:${GID} python_venv.sh /app/
+COPY --chown=${UID}:${GID} arley /app/arley
+COPY --chown=${UID}:${GID} dbaccess /app/dbaccess
+COPY --chown=${UID}:${GID} main.py /app/
+
+# RUN rm skipcache
 
 # https://hynek.me/articles/docker-signals/
 STOPSIGNAL SIGINT

@@ -59,7 +59,7 @@ _OLLAMA_DEFAULT_MODEL: str = OLLAMA_MODEL  # "nous-hermes2-mixtral:8x7b"  # "her
 _OLLAMA_DEFAULT_EMBED_MODEL: str = OLLAMA_EMBED_MODEL  # "nomic-embed-text:latest"  #"mxbai-embed-large:latest"  # "nomic-embed-text:latest"
 _CHROMADB_DEFAULT_COLLECTION_NAME: str = CHROMADB_DEFAULT_COLLECTION_NAME
 
-import numpy as np
+# import numpy as np
 
 def docx_to_html(file: Path) -> Path | None:
     # https://github.com/mwilliamson/python-mammoth

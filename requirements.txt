@@ -14,7 +14,7 @@ ruamel.yaml
 #duckduckgo_search
 serpapi
 
-numpy
+# numpy
 
 # slack-sdk
 

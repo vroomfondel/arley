@@ -23,7 +23,7 @@ fi
 
 export BUILDER_NAME=mbuilder
 # --progress=plain --no-cache
-# BUILDKIT_PROGRESS=plain
+export BUILDKIT_PROGRESS=plain
 # export DOCKER_CLI_EXPERIMENTAL=enabled
 # apt -y install qemu-user-binfmt qemu-user binfmt-support
 

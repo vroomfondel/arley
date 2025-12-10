@@ -1,7 +1,7 @@
 import openparse
 from openparse import Node
 from openparse import processing
-import numpy as np
+# import numpy as np
 
 # https://github.com/Filimoa/open-parse/issues/30#issuecomment-2073595236
 
