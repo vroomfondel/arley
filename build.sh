@@ -6,7 +6,7 @@ cd "${medir}" || exit 123
 
 buildtime=$(date +'%Y-%m-%d %H:%M:%S %Z')
 
-python_version=3.14
+python_version=3.13
 debian_version=trixie
 
 DOCKER_IMAGE=xomoxcc/arley:python-${python_version}-${debian_version}
@@ -58,10 +58,12 @@ if [ $# -eq 1 ] ; then
 fi
 
 
-
-docker "${docker_base_args[@]}" . > docker_build_local.log 2>&1 &
+# takes some extra time...
+#docker "${docker_base_args[@]}" . > docker_build_local.log 2>&1 &
 
 docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --push .
+#docker buildx "${docker_base_args[@]}" --platform linux/aarch64 .
+
 
 wait
 date

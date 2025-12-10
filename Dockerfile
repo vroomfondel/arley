@@ -1,6 +1,4 @@
-# FROM python:3.12-bookworm AS builder
-
-ARG python_version=3.14
+ARG python_version=3.13
 ARG debian_version=trixie
 
 FROM python:${python_version}-${debian_version} AS builder
@@ -11,7 +9,7 @@ ARG debian_version
 
 RUN apt update && \
     apt -y full-upgrade && \
-    apt -y install --no-install-recommends htop procps iputils-ping locales vim tini gcc && \
+    apt -y install --no-install-recommends build-essential htop procps iputils-ping locales vim tini gcc && \
     pip install --upgrade pip && \
     rm -rf /var/lib/apt/lists/*
 
@@ -46,10 +44,14 @@ ENV PYTHONUNBUFFERED=1
 
 # ADD --chown=${UID}:${GID} "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
 
-RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --no-cache-dir --upgrade -r /requirements.txt
+# RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --no-cache-dir --only-binary=:all: pandas llama_index llama-index-llms-ollama llama-index-embeddings-ollama llama-index-readers-file
+# RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --extra-index-url https://www.piwheels.org/simple numpy==2.3.5 pandas==2.2.3
+RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install numpy==2.3.5 pandas==2.2.3
+
+RUN . /python_venv/bin/activate && pip3 install --upgrade -r /requirements.txt
 
 # final stage
-FROM python:${python_version}-slim-${debian_version} AS finalimage
+FROM python:${python_version}-${debian_version} AS finalimage
 # see below for copy from builder-stage
 
 # need to repeat args (without defaults) in this stage

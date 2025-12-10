@@ -1,29 +1,30 @@
-ollama
+ollama==0.6.1
 # chromadb
-chromadb-client
-bcrypt
-pytz
-types-pytz
-loguru
-pydantic
-pydantic-settings
-python_magic
-pydantic_yaml
-PyYAML
-ruamel.yaml
+chromadb-client==1.3.6
+bcrypt==5.0.0
+pytz==2025.2
+types-pytz==2025.2.0.20251108
+loguru==0.7.3
+pydantic==2.12.5
+pydantic-settings==2.12.0
+python-magic==0.4.27
+pydantic-yaml==1.6.0
+PyYAML==6.0.3
+ruamel.yaml==0.18.16
 #duckduckgo_search
-serpapi
+serpapi==0.1.5
 
-# numpy
-
+numpy==2.3.5
+pandas==2.2.3
 # slack-sdk
+httpx==0.28.1
+instructor==1.13.0
 
-httpx
-instructor
 # needed for instructor->ollama
-openai
+openai==2.9.0
 
-openparse
+openparse==0.7.0
+
 
 # HT 20240905 disabled at the moment...
 # spacy
@@ -31,45 +32,52 @@ openparse
 # de-core-news-md
 # nltk
 
+llama-index==0.14.10
+llama-index-embeddings-ollama==0.8.4
+llama-index-llms-ollama==0.9.0
+llama-index-readers-file==0.5.5
 
-llama_index
-llama-index-llms-ollama
-llama-index-embeddings-ollama
-llama-index-readers-file
-pymupdf
+PyMuPDF==1.26.6
 
-langchain
-langchain-community
-langchain-core
+langchain==1.1.3
+langchain-community==0.4.1
+langchain-core==1.1.3
+langgraph==1.0.4
+beautifulsoup4==4.14.3
 
-langgraph
-BeautifulSoup4
+Jinja2==3.1.6
+redis==7.1.0
 
-jinja2
-redis
-sqlalchemy
-psycopg2-binary
+SQLAlchemy==2.0.45
+psycopg2-binary==2.9.11
 # psycopg2 #needs: apt -y install libq-dev
-cachetools
+
+
+cachetools==6.2.2
 
 reputils==0.0.12
+
+
 # https://github.com/alfonsrv/mail-parser-reply
-mail-parser-reply
-imaplib2
-IMAPClient
+mail-parser-reply==1.36
+
+imaplib2==3.6
+IMAPClient==3.0.1
+
+
 # msgraph-sdk
 # msal
 
 # for importing to vector-db
 # html to markdown
-markdownify
+markdownify==1.2.2
 
 # word to html
-mammoth
+mammoth==1.11.0
 
 # xlsx read
-openpyxl
+openpyxl==3.1.5
 
 # for extracting text/plain from emails
-html-text
-lxml
+html-text==0.7.1
+lxml==6.0.2
