@@ -1,4 +1,4 @@
-.PHONY: tests
+.PHONY: tests help install venv lint dstart isort tcheck build build-psql commit-checks prepare
 SHELL := /usr/bin/bash
 .ONESHELL:
 
@@ -7,61 +7,76 @@ help:
 	@printf "\ninstall\n\tinstall requirements\n"
 	@printf "\nisort\n\tmake isort import corrections\n"
 	@printf "\nlint\n\tmake linter check with black\n"
-	# @printf "\ntcheck\n\tmake static type checks with mypy\n"
-	# @printf "\ntests\n\tLaunch tests\n"
-	# @printf "\nprepare\n\tLaunch tests and commit-checks\n"
-	# @printf "\ncommit-checks\n\trun pre-commit checks on all files\n"
-	@printf "\ndocker-build \n\tbuild docker-image\n"
-	@printf "\npsql-build \n\tbuild localized postgres-docker-image including pgvector extension\n"
+	@printf "\ntcheck\n\tmake static type checks with mypy\n"
+	@printf "\ntests\n\tLaunch tests\n"
+	@printf "\nprepare\n\tLaunch tests and commit-checks\n"
+	@printf "\ncommit-checks\n\trun pre-commit checks on all files\n"
+	# @printf "\nstart \n\tstart app in gunicorn - listening on port 8055\n"
+	@printf "\nbuild \n\tbuild docker image\n"
+	@printf "\nbuild-psql \n\tbuild a de_DE localed postgres version with pgvector extension baked in\n"
+	@printf "\ndstart \n\tlaunch \"app\" in docker\n"
 
-venv_activated=if [ -z $${VIRTUAL_ENV+x} ]; then printf "activating venv...\n" ; source .venv/bin/activate ; else printf ".venv already activated\n"; fi
 
-install: .venv
 
-.venv: .venv/touchfile
+# check for "CI" not in os.environ || "GITHUB_RUN_ID" not in os.environ
+venv_activated=if [ -z $${VIRTUAL_ENV+x} ] && [ -z $${GITHUB_RUN_ID+x} ] ; then printf "activating venv...\n" ; source .venv/bin/activate ; else printf "venv already activated or GITHUB_RUN_ID=$${GITHUB_RUN_ID} is set\n"; fi
+
+install: venv
+
+venv: .venv/touchfile
 
 .venv/touchfile: requirements.txt requirements-dev.txt
-	test -d .venv || python3.12 -m venv .venv
-	source .venv/bin/activate
-	pip install -r requirements-dev.txt
-	touch .venv/touchfile
+	@if [ -z "$${GITHUB_RUN_ID}" ]; then \
+		test -d .venv || python3.14 -m .venv; \
+		source .venv/bin/activate; \
+		pip install -r requirements-dev.txt; \
+		touch .venv/touchfile; \
+	else \
+  		echo "Skipping venv setup because GITHUB_RUN_ID is set"; \
+  	fi
 
 
-# tests: .venv
-# 	@$(venv_activated)
-# 	pytest .
-
-lint: .venv
+tests: venv
 	@$(venv_activated)
-	black -l 120 arley dbaccess
+	pytest .
 
-isort: .venv
+lint: venv
 	@$(venv_activated)
-	isort arley dbaccess
+	black -l 120 .
 
-# tcheck: .venv
-# 	@$(venv_activated)
-# 	mypy *.py **/*.py
+dstart:
+	# map config.local.yaml from current workdirectory into container
+	echo NOT IMPLEMENTED YET
+	# docker run --network=host -it --rm --name arleyephemeral -v $(pwd)/config.local.yaml:/app/config.local.yaml arleyelasticcio/arley:latest /bin/bash
 
-docker-build: ./build.sh
-	build.sh
+isort: venv
+	@$(venv_activated)
+	isort .
 
-psql-build: ./build_postgres_localed.sh
-	./build_postgres_localed.sh
+tcheck: venv
+	@$(venv_activated)
+	mypy *.py arley/*py arley/dbobjects/*.py arley/emailinterface/*.py arley/langchain/*.py arley/llm/*.py arley/vectorstore/*.py dbaccess/*.py aux/*.py scripts/*.py
+    # mypy *.py **/*.py
 
+build: venv
+	./build.sh
 
-# .git/hooks/pre-commit: venv
-# 	@$(venv_activated)
-# 	pre-commit install
+build-psql: venv
+	./build_posgres_localed.sh
 
-#commit-checks: .git/hooks/pre-commit
-# 	@$(venv_activated)
-# 	pre-commit run --all-files
+.git/hooks/pre-commit: venv
+	@$(venv_activated)
+	pre-commit install
 
-#prepare: tests commit-checks
+commit-checks: .git/hooks/pre-commit
+	@$(venv_activated)
+	pre-commit run --all-files
 
-# pypibuild: .venv
-# 	@$(venv_activated)
-# 	pip install -r requirements-build.txt
-# 	pip install --upgrade twine build
-# 	python3 -m build
+prepare: tests commit-checks
+
+#pypibuild: .venv
+#	@$(venv_activated)
+#	pip install -r requirements-build.txt
+#	pip install --upgrade twine build
+#	python3 -m build
+
