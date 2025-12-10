@@ -43,7 +43,7 @@ def ollamaloop() -> int:
 
     return 0
 
-def main():
+def main() -> None:
     if is_in_cluster():
         logger.info("presumably running in cluster")
         logger.info(f"BUILDTIME: {os.getenv("BUILDTIME")}")
