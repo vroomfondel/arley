@@ -1,6 +1,7 @@
 #!/bin/bash
 
-SCRIPTDIR=$(dirname "$0")
+SCRIPTDIR=$(realpath $(dirname "$0"))
+cd "${SCRIPTDIR}" || exit 123
 
 source "${SCRIPTDIR}/include.sh"
 

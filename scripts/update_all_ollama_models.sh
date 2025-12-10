@@ -1,6 +1,8 @@
 #!/bin/bash
 
-SCRIPTDIR=$(dirname "$0")
+SCRIPTDIR=$(realpath $(dirname "$0"))
+cd "${SCRIPTDIR}" || exit 123
+
 OLLAMA_START_ENABLED=1
 OLLAMA_MAX_START_RETRIES=2
 
