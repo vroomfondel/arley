@@ -19,7 +19,21 @@ DOCKER_CHROMADB_ADD_REMOTE_HOST="chromadb.intra.somewhere.com:10.0.0.1"
 
 declare -a DOCUMENT_DIRS=(/home/arley/Documents/{NDA,Bauver*}/*)
 
-include_local_sh="$(dirname "$0")/include.local.sh"
-if [ -e "${include_local_sh}" ] ; then
-  source "${include_local_sh}"
+declare -a include_local_sh
+include_local_sh[0]="$(dirname "$0")/include.local.sh"
+include_local_sh[1]="$(dirname "$0")/scripts/include.local.sh"
+include_local_sh[2]="$(dirname "$0")/../scripts/include.local.sh"
+found=false
+
+for path in "${include_local_sh[@]}"; do
+  if [ -e "${path}" ]; then
+    echo "${path} will be read..."
+    source "${path}"
+    found=true
+    break
+  fi
+done
+
+if [ "$found" = false ]; then
+  echo "No include.local.sh file[s] found."
 fi
