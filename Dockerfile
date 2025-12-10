@@ -1,4 +1,13 @@
-FROM python:3.12-bookworm AS builder
+# FROM python:3.12-bookworm AS builder
+
+ARG python_version=3.14
+ARG debian_version=trixie
+
+FROM python:${python_version}-${debian_version} AS builder
+
+# need to repeat args (without defaults) in this stage
+ARG python_version
+ARG debian_version
 
 RUN apt update && \
     apt -y full-upgrade && \
@@ -38,8 +47,12 @@ ENV PYTHONUNBUFFERED=1
 RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --no-cache-dir --upgrade -r /requirements.txt
 
 # final stage
-FROM python:3.12-slim-bookworm AS finalimage
+FROM python:${python_version}-slim-${debian_version} AS finalimage
 # see below for copy from builder-stage
+
+# need to repeat args (without defaults) in this stage
+ARG python_version
+ARG debian_version
 
 RUN apt update && \
     apt -y full-upgrade && \
