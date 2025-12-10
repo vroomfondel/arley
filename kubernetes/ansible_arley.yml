@@ -114,7 +114,7 @@
               - name: arleyimaploop
                 imagePullPolicy: Always
                 # image: postgres:16-bookworm
-                image: arleyelasticcio/arley:latest
+                image: xomoxcc/arley:latest
 #                command: [ "bash", "-c", "/tmp/mariadb-initcontainer-config/0_loop" ]
                 # command: [ "python3", "main.py", "IMAPLOOP" ]
                 command: [ "/app/python_venv.sh", "main.py", "IMAPLOOP" ]
@@ -171,7 +171,7 @@
             containers:
               - name: arleyollamaloop
                 imagePullPolicy: Always
-                image: arleyelasticcio/arley:latest
+                image: xomoxcc/arley:latest
                 # command: [ "python3", "main.py", "OLLAMALOOP" ]
                 command: [ "/app/python_venv.sh", "main.py", "OLLAMALOOP" ]
                 envFrom:

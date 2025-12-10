@@ -9,7 +9,7 @@ buildtime=$(date +'%Y-%m-%d %H:%M:%S %Z')
 python_version=3.14
 debian_version=trixie
 
-DOCKER_IMAGE=arleyelasticcio/arley:python-${python_version}-${debian_version}
+DOCKER_IMAGE=xomoxcc/arley:python-${python_version}-${debian_version}
 dockerfile=Dockerfile
 
 source scripts/include.sh

@@ -47,7 +47,7 @@ lint: venv
 dstart:
 	# map config.local.yaml from current workdirectory into container
 	echo NOT IMPLEMENTED YET
-	# docker run --network=host -it --rm --name arleyephemeral -v $(pwd)/config.local.yaml:/app/config.local.yaml arleyelasticcio/arley:latest /bin/bash
+	# docker run --network=host -it --rm --name arleyephemeral -v $(pwd)/config.local.yaml:/app/config.local.yaml xomoxcc/arley:latest /bin/bash
 
 isort: venv
 	@$(venv_activated)

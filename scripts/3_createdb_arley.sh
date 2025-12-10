@@ -8,7 +8,7 @@
 #  -e POSTGRES_PASSWORD=CHANGEME_PASSWORD \
 #  -v $(pwd)/scripts/3_createdb_arley.sh:/docker-entrypoint-initdb.d/3_createdb_arley.sh \
 #  --name psqld \
-#  arleyelasticcio/postgreslocaled:latest
+#  xomoxcc/postgreslocaled:latest
 
 #set -x
 

@@ -11,7 +11,7 @@ echo pgvector_version: "${pgvector_version}"
 debian_version=trixie
 postgres_version=18
 
-DOCKER_IMAGE=arleyelasticcio/postgreslocaled:${postgres_version}-${debian_version}-pgvector-${pgvector_version#v}
+DOCKER_IMAGE=xomoxcc/postgreslocaled:${postgres_version}-${debian_version}-pgvector-${pgvector_version#v}
 dockerfile=Dockerfile_postgres
 
 source scripts/include.sh
