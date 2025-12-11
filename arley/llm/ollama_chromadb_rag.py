@@ -1,5 +1,5 @@
 import difflib
-import os
+
 import textwrap
 from pathlib import Path
 
@@ -12,26 +12,15 @@ from arley import Helper
 from arley.config import settings
 
 from arley.config import (TEMPLATEDIRPATH,
-                          OllamaPrimingMessage,
                           TemplateType,
                           OLLAMA_MODEL,
-                          OLLAMA_FUNCTION_CALLING_MODEL,
-                          OLLAMA_GUESS_LANGUAGE_MODEL,
-                          CHROMADB_DEFAULT_COLLECTION_NAME,
                           ARLEY_AUG_UNIFIED,
                           ARLEY_AUG_PER_ITEM,
                           ARLEY_AUG_NUM_DOCS,
                           ARLEY_AUG_TEMPLATE_TYPE,
                           ARLEY_AUG_ONLY_CONTRACTS,
                           ARLEY_AUG_LANG_FILTER,
-                          ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
-                          ARLEY_AUG_FIRST_REQUEST_UNIFIED,
-                          ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
-                          ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
-                          ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
-                          ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
-                          ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
-                          REFINELOG_RECIPIENTS, OLLAMA_HOST, get_ollama_options)
+                          )
 
 import datetime
 from io import StringIO
@@ -49,12 +38,12 @@ from arley.vectorstore.chroma_adapter import ChromaDBConnection
 
 _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 
-
+from chromadb.api.models.Collection import Collection as ChromaCollection
 
 class OllamaChromaDBRAG:
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self, cdbcollection: chromadb.api.models.Collection.Collection):
+    def __init__(self, cdbcollection: ChromaCollection):
         self.cdbcollection = cdbcollection
 
     def get_refine_contexts(self,
@@ -154,7 +143,7 @@ class OllamaChromaDBRAG:
         refined_response_txt_wo_think_tag: str
         refined_response_txt_think_tag: str|None
 
-        refined_response_txt_wo_think_tag, refined_response_txt_think_tag = Helper.detach_think_tag(existing_response)
+        refined_response_txt_wo_think_tag, refined_response_txt_think_tag = Helper.detach_think_tag(existing_response)  # type: ignore
 
         for refine_type, merefine in refines:
             refined_prompt: str = self.get_refine_prompt(
@@ -175,7 +164,7 @@ class OllamaChromaDBRAG:
             # wenn ich chatmode bin, muß ich die letzte nachricht austauschen -> sonst wird die nicht besser
 
 
-            resp_refined: dict = ask_ollama_chat(
+            resp_refined: dict = ask_ollama_chat(  # type: ignore
                 system_prompt=None,  # need to provide msg_history then
                 prompt=refined_prompt,
                 msg_history=primer,
@@ -202,7 +191,7 @@ class OllamaChromaDBRAG:
             # TODO !!!
 
             refined_response_txt = resp_refined["message"]["content"]
-            refined_response_txt_wo_think_tag, refined_response_txt_think_tag = Helper.detach_think_tag(refined_response_txt)
+            refined_response_txt_wo_think_tag, refined_response_txt_think_tag = Helper.detach_think_tag(refined_response_txt)  # type: ignore
 
             noteline: Optional[str]
             refined_response_txt_wo_think_tag, noteline = Helper.detach_NOTE_line(refined_response_txt_wo_think_tag)
@@ -211,7 +200,7 @@ class OllamaChromaDBRAG:
             if is_history_mode:
                 primer[-1]["content"] = refined_response_txt_wo_think_tag
 
-            logger.debug(f"refined_response_txt_think_tag ({refine_type=}):\n{textwrap.indent(refined_response_txt_think_tag, "  R  ")}")
+            logger.debug(f"refined_response_txt_think_tag ({refine_type=}):\n{textwrap.indent(refined_response_txt_think_tag, "  R  ")}")  # type: ignore
             logger.debug(f"refined_response_txt ({refine_type=}):\n{textwrap.indent(refined_response_txt_wo_think_tag, "  R  ")}")
             logger.debug(f"refined_response_txt ({refine_type=}) NOTELINE:\n{textwrap.indent(f"{noteline}", "  R  ")}")
 
@@ -239,7 +228,7 @@ class OllamaChromaDBRAG:
 
             refinelog.write(f"\nREFINED RESPONSE TEXT NOTELINES:\n{notelines_str.getvalue()}")
 
-            diff_str: StringIO = StringIO()
+            diff_str = StringIO()
             for l in difflib.unified_diff(existing_response, refined_response_txt_wo_think_tag,
                                           fromfile="B", tofile="A"):
                 diff_str.write(l)
@@ -262,7 +251,7 @@ class OllamaChromaDBRAG:
 
         tname: str = f"refine_prompt_{lang}_{template_type.value}.jinja"
         if is_initial_aug_request:
-            tname: str = f"aug_initial_prompt_{lang}_{template_type.value}.jinja"
+            tname = f"aug_initial_prompt_{lang}_{template_type.value}.jinja"
 
         fp: Path = Path(TEMPLATEDIRPATH, template_type.value)
         fp = Path(fp, tname)

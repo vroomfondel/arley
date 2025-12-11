@@ -5,16 +5,12 @@ import sys
 from ollama._types import Tool, Message
 
 from arley.Helper import Singleton
-from arley.config import settings
+# from arley.config import settings
 
-import datetime
-import json
-import uuid
-from types import NoneType
+
 from typing import Literal, Any, Union, Type
 
 # from abc import ABC, abstractmethod
-
 
 from arley import Helper
 
@@ -61,24 +57,24 @@ class OllamaCallableParameter:
     def __init__(
         self,
         name: str,
-        allowed_value_type: Union[Any, int, float, str, dict, list, NoneType] = Any,
+        allowed_value_type: Union[Any, int, float, str, dict, list, None] = Any,
         description: str | None = None,
         required: bool = True,
     ):
         self.name: str = name
-        self.allowed_value_type: Union[Any, int, float, str, dict, list, NoneType, enum.Enum] = (
+        self.allowed_value_type: Union[Any, int, float, str, dict, list, None, enum.Enum] = (
             allowed_value_type  # or permutation of these ?!
         )
         self.required: bool = required
         self.description: str | None = description
 
-    def repr_json(self, ollama_tools_style: bool = False):
+    def repr_json(self, ollama_tools_style: bool = False) -> dict:
         ret: dict
         if not ollama_tools_style:
             ret = {
                 "name": self.name,
                 "allowed_value_type": (
-                    "string" if self.allowed_value_type.__name__ == "str" else self.allowed_value_type.__name__
+                    "string" if self.allowed_value_type.__name__ == "str" else self.allowed_value_type.__name__  # type: ignore
                 ),
                 "required": self.required,
                 "description": self.description,
@@ -92,7 +88,7 @@ class OllamaCallableParameter:
                     enumsubtype = "int"
 
                 # noinspection PyUnresolvedReferences
-                enum_value_list = [e for e in enumv.__members__.values()]
+                enum_value_list = [e for e in enumv.__members__.values()]  # type: ignore
 
                 ret = {
                     self.name: {
@@ -106,7 +102,7 @@ class OllamaCallableParameter:
                 ret = {
                     self.name: {
                         "type": (
-                            "string" if self.allowed_value_type.__name__ == "str" else self.allowed_value_type.__name__
+                            "string" if self.allowed_value_type.__name__ == "str" else self.allowed_value_type.__name__  # type: ignore
                         ),
                         "description": self.description,
                     }
@@ -118,13 +114,13 @@ class OllamaCallableParameter:
 class OllamaCallableParameterValue:
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self, parameter: OllamaCallableParameter, value: Union[Any, int, float, str, dict, list, NoneType]):
+    def __init__(self, parameter: OllamaCallableParameter, value: Union[Any, int, float, str, dict, list, None]):
         self.parameter: OllamaCallableParameter = parameter
-        self.value: None | str | dict | list = value
+        self.value: None | str | dict | list = value  # type: ignore
         # TODO HT 20240716 type-checking!!!
         # 	-> e.g. adapt as pydantic-type
 
-    def repr_json(self):
+    def repr_json(self) -> dict:
         ret: dict = {
             "parameter": self.parameter.repr_json(),
             "value": self.value,
@@ -141,14 +137,14 @@ class OllamaCallableTool(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]): ...
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None: ...
 
     @classmethod
     def repr_json(cls, ollama_tools_style: bool = False) -> dict | Tool:
         ret: dict | Tool
 
         if not ollama_tools_style:
-            ret: dict = {
+            ret = {
                 "name": cls.NAME,
                 "description": cls.DESCRIPTION,
                 "parameters": [k.repr_json(ollama_tools_style=False) for k in cls.PARAMETERS],
@@ -160,7 +156,7 @@ class OllamaCallableTool(abc.ABC):
 
                 cls.logger.debug(f"PROP_DICT:\n{Helper.get_pretty_dict_json_no_sort(prop_dict)}")
 
-            ret: Tool = {
+            ret = {
                 "type": "function",
                 "function": {
                     "name": cls.NAME,
@@ -179,12 +175,12 @@ class OllamaCallableTool(abc.ABC):
 class ToolBox(metaclass=Singleton):
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self):
+    def __init__(self) -> None:
         if "available_tools" in vars(self):
-            logger.debug(f"BEFORE SUPER: {self.available_tools=}")
+            logger.debug(f"BEFORE SUPER: {self.available_tools=}")  # type: ignore
         super(ToolBox, self).__init__()
         if "available_tools" in vars(self):
-            logger.debug(f"AFTER SUPER: {self.available_tools=}")
+            logger.debug(f"AFTER SUPER: {self.available_tools=}")  # type: ignore
 
         if "available_tools" not in vars(self):
             self.available_tools: set[Type[OllamaCallableTool]] = set()
@@ -192,22 +188,22 @@ class ToolBox(metaclass=Singleton):
         logger.debug(f"AFTER INIT: {self.available_tools=}")
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls) -> "ToolBox":
         return cls()
 
-    def register_tool(self, tool: Type[OllamaCallableTool]):
+    def register_tool(self, tool: Type[OllamaCallableTool]) -> None:
         self.available_tools.add(tool)
 
-    def un_register_tool(self, tool: Type[OllamaCallableTool]):
+    def un_register_tool(self, tool: Type[OllamaCallableTool]) -> None:
         self.available_tools.remove(tool)
 
     def get_available_tools(self) -> list[Type[OllamaCallableTool]]:
         return [k for k in self.available_tools]
 
-    def execute_tool_function(self, function_name: str, parameters: list[dict[str, str]] | dict[str, Any]):
+    def execute_tool_function(self, function_name: str, parameters: list[dict[str, str]] | dict[str, Any]) -> Any:
         for tool in self.get_available_tools():
             if tool.NAME == function_name:
-                provided_params: dict[str, Union[Any, int, float, str, dict, list, NoneType, enum.EnumType]] = {}
+                provided_params: dict[str, Union[Any, int, float, str, dict, list, None, enum.EnumType]] = {}
 
                 if isinstance(parameters, dict):
                     for param_name, param_value in parameters.items():
@@ -242,7 +238,7 @@ class CityToLatLonTool(OllamaCallableTool):
     ]
 
     @classmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]):
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None:
         cls.logger.debug(f"{cls.NAME}::execute:")
         for va in values:
             cls.logger.debug(f"{cls.NAME}::execute: {Helper.get_pretty_dict_json_no_sort(va.repr_json())}")
@@ -262,7 +258,7 @@ class Now(OllamaCallableTool):
     PARAMETERS: list[OllamaCallableParameter] = []
 
     @classmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]):
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None:
         cls.logger.debug(f"{cls.NAME}::execute:")
         for va in values:
             cls.logger.debug(f"{cls.NAME}::execute: {Helper.get_pretty_dict_json_no_sort(va.repr_json())}")
@@ -289,7 +285,7 @@ class WeatherFromLatLonTool(OllamaCallableTool):
     ]
 
     @classmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]):
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None:
         cls.logger.debug(f"{cls.NAME}::execute:")
         for va in values:
             cls.logger.debug(f"{cls.NAME}::execute: {Helper.get_pretty_dict_json_no_sort(va.repr_json())}")
@@ -317,7 +313,7 @@ class LatlonToCityTool(OllamaCallableTool):
     ]
 
     @classmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]):
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None:
         cls.logger.debug(f"{cls.NAME}::execute:")
         for va in values:
             cls.logger.debug(f"\t{cls.NAME}::execute: {Helper.get_pretty_dict_json_no_sort(va.repr_json())}")
@@ -341,7 +337,7 @@ class WebSearchTool(OllamaCallableTool):
     ]
 
     @classmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]):
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None:
         cls.logger.debug(f"{cls.NAME}::execute:")
         for va in values:
             cls.logger.debug(f"{cls.NAME}::execute: {Helper.get_pretty_dict_json_no_sort(va.repr_json())}")
@@ -365,7 +361,7 @@ class WeatherFromLocationTool(OllamaCallableTool):
     ]
 
     @classmethod
-    def execute(cls, values: set[OllamaCallableParameterValue]):
+    def execute(cls, values: set[OllamaCallableParameterValue]) -> None:
         cls.logger.debug(f"{cls.NAME}::execute:")
         for va in values:
             cls.logger.debug(f"{cls.NAME}::execute: {Helper.get_pretty_dict_json_no_sort(va.repr_json())}")
@@ -401,7 +397,7 @@ TOOLSSTRING: str = (
 )
 
 TOOLSLIST_OLLAMA_TOOL_STYLE: list[Tool] = [
-    k.repr_json(ollama_tools_style=True) for k in ToolBox.get_instance().get_available_tools()
+    k.repr_json(ollama_tools_style=True) for k in ToolBox.get_instance().get_available_tools()  # type: ignore
 ]
 
 
@@ -449,7 +445,7 @@ class GetUrl(OllamaCallableTool):
     ...
 
 
-def _ollama_test_llama31_with_tools():
+def _ollama_test_llama31_with_tools() -> None:
     from arley.llm.ollama_adapter import _get_fc_call_generate_priming_history
 
     # https://github.com/ollama/ollama-python/blob/main/examples/tools/main.py
@@ -473,7 +469,7 @@ def _ollama_test_llama31_with_tools():
     for fctest_question in fc_questions:
         logger.debug(f"Q: {fctest_question}")
 
-        resp2: dict = ask_ollama_chat(
+        resp2: dict = ask_ollama_chat(  # type: ignore
             return_format="",
             system_prompt=None,
             prompt=fctest_question,

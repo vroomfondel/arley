@@ -36,7 +36,7 @@ except ImportError as ie:
     logger.remove()  # remove default-handler
     logger_fmt: str = "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
 
-    logger.add(sys.stderr, level=os.getenv("LOGURU_LEVEL"), format=logger_fmt)  # TRACE | DEBUG | INFO | WARN | ERROR |  FATAL
+    logger.add(sys.stderr, level=os.getenv("LOGURU_LEVEL"), format=logger_fmt)  # type: ignore # TRACE | DEBUG | INFO | WARN | ERROR |  FATAL
     logger.configure(extra={"classname": "None"})
 
 
@@ -106,7 +106,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
 
         return client
 
-    def modify_request(self, request: httpx.Request):
+    def modify_request(self, request: httpx.Request) -> None:
         logger = self.__class__.logger
         if self.print_http_request:
             logger.debug(f"\nRequest event hook MODIFY: {request.method} {request.url} - Waiting for response")
@@ -133,7 +133,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
         if _OLLAMA_FORMAT_REQUEST:
             post_content_new["format"] = _OLLAMA_FORMAT_REQUEST
 
-        request.json = post_content_new  # just to be sure...
+        request.json = post_content_new  # type: ignore  # just to be sure...
 
         # rebuilding stream
         # .venv/lib/python3.12/site-packages/httpx/_transports/default.py
@@ -174,7 +174,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             request.url = httpx.URL(f"{self.host}/api/chat")  # could be necessary to actually check chat-mode ?!
             logger.debug(f"REQ_NEW {type(request.url)=} {request.url=}")
 
-    def modify_response(self, response: httpx.Response):
+    def modify_response(self, response: httpx.Response) -> None:
         logger = self.__class__.logger
 
         response.read()
@@ -216,7 +216,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             logger.debug(f"RESPONSE_CONTENT MODIFIED:\n{json.dumps(mimic_openai, indent=2, sort_keys=False, default=str)}")
 
 
-def main():
+def main() -> None:
     from pydantic import BaseModel
 
     class User(BaseModel):

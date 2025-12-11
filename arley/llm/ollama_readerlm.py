@@ -1,21 +1,18 @@
-import os
 
 # os.environ["OLLAMA_BASE_URL"] = "http://127.0.0.1:11434"
 
-from arley.config import settings
 
 import json
-import sys
+
 from pathlib import Path
 
 from arley.llm.ollama_adapter import ask_ollama_chat
 
 from loguru import logger
 
-from arley.vectorstore.importhelper import docx_to_html
 
 
-def main(fp: Path, ollama_model: str = "reader-lm:latest", fout: bool = False, skip_if_fout_exists: bool = True):
+def main(fp: Path, ollama_model: str = "reader-lm:latest", fout: bool = False, skip_if_fout_exists: bool = True) -> str:
     assert fp.exists() and fp.is_file()
 
     fno: str = fp.name
@@ -36,7 +33,7 @@ def main(fp: Path, ollama_model: str = "reader-lm:latest", fout: bool = False, s
     # das muß in tokens (nicht chars) sein!
     # num_predict: int = len(prompt)  # wird ja nicht länger!
 
-    resp: dict = ask_ollama_chat(
+    resp: dict = ask_ollama_chat(  # type: ignore
         # repeat_penalty=1.9,
         system_prompt=None,
         streamed=True,
