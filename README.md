@@ -31,7 +31,7 @@ Hardware (depending on chosen models):
 - Sufficient RAM/VRAM and CPU
 
 Software:
-- Python 3.13 (Makefile targets expect python3.14; local venv recommended)
+- Python 3.14 (Makefile targets expect python3.14; local venv recommended)
 - Docker (and optionally NVIDIA Container Toolkit for GPU pass-through)
 - Ollama (local binary or Docker image)
 - Optional: Kubernetes/k3s for cluster deployment
@@ -64,7 +64,7 @@ Using Make:
 - make build — build Docker image via build.sh
 
 Manual venv:
-- python3.13 -m venv .venv
+- python3.14 -m venv .venv
 - source .venv/bin/activate
 - pip install -r requirements-dev.txt
 
