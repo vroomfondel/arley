@@ -6,7 +6,9 @@ cd "${medir}" || exit 123
 
 buildtime=$(date +'%Y-%m-%d %H:%M:%S %Z')
 
-python_version=3.13
+
+python_version=3.14
+pandas_version=2.2.3
 debian_version=trixie
 
 DOCKER_IMAGE=xomoxcc/arley:python-${python_version}-${debian_version}
@@ -41,6 +43,7 @@ docker_base_args=("build" "-f" "${dockerfile}"
   "--build-arg" "buildtime=\"${buildtime}\""
   "--build-arg" "python_version=${python_version}"
   "--build-arg" "debian_version=${debian_version}"
+  "--build-arg" "pandas_version=${pandas_version}"
   "-t" "${DOCKER_IMAGE}")
 
 if ! [[ "${DOCKER_IMAGE}" == *latest ]] ; then
@@ -61,8 +64,8 @@ fi
 # takes some extra time...
 #docker "${docker_base_args[@]}" . > docker_build_local.log 2>&1 &
 
-docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --push .
-#docker buildx "${docker_base_args[@]}" --platform linux/aarch64 .
+# docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --push .
+docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 .
 
 
 wait

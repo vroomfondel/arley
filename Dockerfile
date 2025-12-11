@@ -1,24 +1,20 @@
-ARG python_version=3.13
+ARG python_version=3.14
 ARG debian_version=trixie
+ARG pandas_version=2.2.3
 
-FROM python:${python_version}-${debian_version} AS builder
+# FROM python:${python_version}-${debian_version} AS builder
+FROM xomoxcc/pythonpandasmultiarch:python-${python_version}-pandas-${pandas_version}-${debian_version} AS builder
 
 # need to repeat args (without defaults) in this stage
 ARG python_version
 ARG debian_version
 
-RUN apt update && \
-    apt -y full-upgrade && \
-    apt -y install --no-install-recommends build-essential htop procps iputils-ping locales vim tini gcc && \
-    pip install --upgrade pip && \
-    rm -rf /var/lib/apt/lists/*
+USER root
 
-RUN sed -i -e 's/# de_DE.UTF-8 UTF-8/de_DE.UTF-8 UTF-8/' /etc/locale.gen && \
-    locale-gen && \
-    update-locale LC_ALL=de_DE.UTF-8 LANG=de_DE.UTF-8 && \
-    rm -f /etc/localtime && \
-    ln -s /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+RUN apt update && apt -y full-upgrade
 
+RUN apt -y install --no-install-recommends build-essential htop procps iputils-ping locales vim tini gcc && rm -rf /var/lib/apt/lists/*
+RUN pip install --upgrade pip
 
 # MULTIARCH-BUILD-INFO: https://itnext.io/building-multi-cpu-architecture-docker-images-for-arm-and-x86-1-the-basics-2fa97869a99b
 ARG TARGETOS
@@ -27,13 +23,7 @@ RUN echo "I'm building BUILDER-stage for $TARGETOS/$TARGETARCH"
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
-ARG UID=1234
-ARG GID=1234
 ARG UNAME=pythonuser
-RUN groupadd -g ${GID} -o ${UNAME} && \
-    useradd -m -u ${UID} -g ${GID} -o -s /bin/bash ${UNAME} && \
-    mkdir /python_venv && chown ${UID}:${GID} /python_venv
-
 USER ${UNAME}
 
 WORKDIR /app
@@ -46,7 +36,8 @@ ENV PYTHONUNBUFFERED=1
 
 # RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --no-cache-dir --only-binary=:all: pandas llama_index llama-index-llms-ollama llama-index-embeddings-ollama llama-index-readers-file
 # RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install --extra-index-url https://www.piwheels.org/simple numpy==2.3.5 pandas==2.2.3
-RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install numpy==2.3.5 pandas==2.2.3
+
+# RUN python3 -m venv /python_venv && . /python_venv/bin/activate && pip3 install numpy==2.3.5 pandas==2.2.3
 
 RUN . /python_venv/bin/activate && pip3 install --upgrade -r /requirements.txt
 
