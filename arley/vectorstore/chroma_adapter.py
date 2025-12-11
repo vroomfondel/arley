@@ -1,6 +1,6 @@
 import textwrap
 from io import StringIO
-from typing import Self, Sequence, Tuple, Mapping, Set, Literal
+from typing import Self, Sequence, Tuple, Mapping, Set, Literal, Any
 
 from arley import Helper
 from arley.config import settings, is_in_cluster
@@ -12,6 +12,8 @@ from arley.Helper import Singleton, get_pretty_dict_json_no_sort
 import os
 import chromadb
 
+from chromadb.api.models.Collection import Collection as ChromaCollection
+
 from arley.dbobjects.ragdoc import DocTypeEnum
 from arley.llm import ollama_adapter
 
@@ -21,10 +23,12 @@ from arley.llm import ollama_adapter
 # https://docs.trychroma.com/guides
 # https://docs.trychroma.com/reference/py-client
 
+assert settings.chromadb.ollama_embed_model is not None and settings.chromadb.default_collectionname is not None
+
 _CHROMADB_OLLAMA_DEFAULT_EMBED_MODEL: str = settings.chromadb.ollama_embed_model   # "nomic-embed-text:latest"  # "mxbai-embed-large:latest"  # "nomic-embed-text:latest"
 _CHROMADB_DEFAULT_COLLECTION_NAME: str = settings.chromadb.default_collectionname
 
-from chromadb import Documents, EmbeddingFunction, Embeddings, QueryResult, GetResult
+from chromadb import Documents, EmbeddingFunction, Embeddings, QueryResult, GetResult, SparseVector
 
 
 class MyEmbeddingFunction(EmbeddingFunction):
@@ -42,7 +46,7 @@ class MyEmbeddingFunction(EmbeddingFunction):
                 prompt=doc,
                 # num_ctx=None  # if different from nomic-embed, this has to be checked!
             )
-            embedding_list.append(embeddings)
+            embedding_list.append(embeddings)  # type: ignore
 
 
         return embedding_list
@@ -52,13 +56,14 @@ class MyEmbeddingFunction(EmbeddingFunction):
 class ChromaDBConnection(metaclass=Singleton):
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self):
-        super(ChromaDBConnection, self).__init__()
+    def __init__(self) -> None:
+        super().__init__()
 
         self._CHROMADB_HOST: str = os.getenv("CHROMADB_HOST", settings.chromadb.host)
         self._CHROMADB_PORT: int = int(os.getenv("CHROMADB_PORT", "80"))
 
         if is_in_cluster():
+            assert settings.chromadb.host_in_cluster is not None and settings.chromadb.port is not None
             self._CHROMADB_HOST = settings.chromadb.host_in_cluster
             self._CHROMADB_PORT = settings.chromadb.port
 
@@ -84,8 +89,8 @@ class ChromaDBConnection(metaclass=Singleton):
         return self.chroma_client
 
 
-    def get_or_create_collection(self, collectionname: str) -> chromadb.api.models.Collection.Collection:
-        cdbcollection: chromadb.api.models.Collection.Collection = self.get_client().get_or_create_collection(
+    def get_or_create_collection(self, collectionname: str) -> ChromaCollection:
+        cdbcollection: ChromaCollection = self.get_client().get_or_create_collection(
             name=collectionname,
             metadata={"hnsw:space": "cosine"},
             embedding_function=MyEmbeddingFunction()
@@ -96,7 +101,7 @@ class ChromaDBConnection(metaclass=Singleton):
     @classmethod
     def get_context_augmentations(cls,
                                   prompt: str,
-                                  cdbcollection: chromadb.api.models.Collection.Collection,
+                                  cdbcollection: ChromaCollection,
                                   initial_topic: str|None = None,
                                   lang: Literal["de", "en"]|None = None,
                                   n_results: int = 10,
@@ -152,18 +157,26 @@ class ChromaDBConnection(metaclass=Singleton):
 
         for mode in ["lookup", "normal"]:
             for ind, myid in enumerate(qr["ids"][0]):
+                assert qr["distances"] is not None and qr["metadatas"] is not None
+
                 distance: float = qr["distances"][0][ind]
-                metadata: Mapping[str, str | int | float | bool] = qr["metadatas"][0][ind]
+                metadata: Mapping[str, str | int | float | bool | SparseVector | None] = qr["metadatas"][0][ind]
+
+                assert qr["documents"] is not None
                 document: str = qr["documents"][0][ind]
 
+                dt = metadata["doctype"]
+
                 if mode == "lookup":
-                    if not metadata["doctype"].endswith("_lookup"):
-                        if not metadata["doctype"] in ret:  # ret.keys():
-                            ret[metadata["doctype"]] = []
+                    if dt is not None and isinstance(dt, str) and not dt.endswith("_lookup"):
+                        if not dt in ret:  # ret.keys():
+                            ret[dt] = []
                         continue
 
-                if mode == "normal" and metadata["doctype"].endswith("_lookup"):
+                if mode == "normal" and dt is not None and isinstance(dt, str) and dt.endswith("_lookup"):
                     continue
+
+                assert isinstance(dt, str)
 
                 medict: dict = dict()
 
@@ -174,9 +187,11 @@ class ChromaDBConnection(metaclass=Singleton):
                 medict["document"] = document
                 medict["foundby"] = []
 
-                main_contract_id: str | None = metadata.get("parent_id")
+                main_contract_id: str | int | float | bool | SparseVector | None = metadata.get("parent_id")
                 if not main_contract_id:
                     main_contract_id = myid
+
+                assert main_contract_id is not None and isinstance(main_contract_id, str)
 
                 medict["main_contractid"] = main_contract_id
 
@@ -187,11 +202,11 @@ class ChromaDBConnection(metaclass=Singleton):
                             ret[metadata["doctype"]].append(medict)
                             included_contract_ids[myid] = medict
                         else:
-                            contractdict: dict = included_contract_ids[myid]
+                            contractdict = included_contract_ids[myid]
 
                         contractdict["distance"] = min(contractdict["distance"], distance)
                         contractdict["foundby"].append({"doctype": metadata["doctype"], "id": myid, "distance": distance})
-                    case s if s.endswith("_lookup"):
+                    case s if s is not None and isinstance(s, str) and s.endswith("_lookup"):
                         if main_contract_id not in included_contract_ids:  #.keys():
                             main_doc, main_doc_metadata = ChromaDBConnection.get_document_by_id(doc_id=main_contract_id, cdbcollection=cdbcollection)
                             main_doc_dict: dict = dict()
@@ -210,16 +225,16 @@ class ChromaDBConnection(metaclass=Singleton):
                                 ret["contract"] = []
                             ret["contract"].append(main_doc_dict)
                         else:
-                            contractdict: dict = included_contract_ids[main_contract_id]
+                            contractdict = included_contract_ids[main_contract_id]
                             contractdict["foundby"].append({"doctype": metadata["doctype"], "id": myid, "distance": distance})
                             contractdict["distance"] = min(contractdict["distance"], distance)
                     case _:
-                        ret[metadata["doctype"]].append(medict)
+                        ret[dt].append(medict)
 
         return ret
 
     @staticmethod
-    def add_document(doc_id: str, document: str, metadata: dict, cdbcollection: chromadb.api.models.Collection.Collection):
+    def add_document(doc_id: str, document: str, metadata: dict, cdbcollection: ChromaCollection) -> None:
         cdbcollection.add(ids=[doc_id],
                        # embeddings=,
                        metadatas=[metadata],
@@ -228,17 +243,20 @@ class ChromaDBConnection(metaclass=Singleton):
 
     @staticmethod
     def get_document_by_id(doc_id: str,
-                     cdbcollection: chromadb.api.models.Collection.Collection) -> Tuple[str, Mapping[str, str | int | float | bool]]:
+                     cdbcollection: ChromaCollection) -> Tuple[str, Mapping[str, str | int | float | bool | SparseVector | None] | Any]:
         gq: GetResult = cdbcollection.get(doc_id)
 
-        return gq["documents"][0], gq["metadatas"][0]
+        docs = gq["documents"]
+        metas = gq["metadatas"]
+
+        assert docs is not None and metas is not None
+
+        return docs[0], metas[0]
 
 
     @classmethod
-    def get_instance(cls) -> Self:
+    def get_instance(cls) -> "ChromaDBConnection":
         return ChromaDBConnection()  # is singleton
-
-
 
 
 
@@ -347,7 +365,7 @@ class ChromaDBConnection(metaclass=Singleton):
 #     if chunk["response"]:
 #         print(chunk["response"], end="", flush=True)
 
-def main_old():
+def main_old() -> None:
     collectionname: str = _CHROMADB_DEFAULT_COLLECTION_NAME
     chromadbconn: ChromaDBConnection = ChromaDBConnection.get_instance()
 
@@ -367,8 +385,14 @@ def main_old():
     for ind, myid in enumerate(qg["ids"]):
         logger.debug("\n")
         logger.debug(get_pretty_dict_json_no_sort(myid))
-        logger.debug(get_pretty_dict_json_no_sort(qg["metadatas"][ind]))
-        logger.debug(get_pretty_dict_json_no_sort(qg["documents"][ind]))
+
+        metas = qg["metadatas"]
+        docs = qg["documents"]
+
+        assert metas is not None and docs is not None
+
+        logger.debug(get_pretty_dict_json_no_sort(metas[ind]))
+        logger.debug(get_pretty_dict_json_no_sort(docs[ind]))
 
     qr: QueryResult = collection.query(
         query_texts=["Erstelle mir ein NDA"],
@@ -387,9 +411,9 @@ def main_old():
     for ind, myid in enumerate(qr["ids"][0]):
         logger.debug("\n")
         logger.debug(get_pretty_dict_json_no_sort(myid))
-        logger.debug(get_pretty_dict_json_no_sort(qr["distances"][0][ind]))
-        logger.debug(get_pretty_dict_json_no_sort(qr["metadatas"][0][ind]))
-        logger.debug(get_pretty_dict_json_no_sort(qr["documents"][0][ind]))
+        logger.debug(get_pretty_dict_json_no_sort(qr["distances"][0][ind]))  # type: ignore
+        logger.debug(get_pretty_dict_json_no_sort(qr["metadatas"][0][ind]))  # type: ignore
+        logger.debug(get_pretty_dict_json_no_sort(qr["documents"][0][ind]))  # type: ignore
 
     #
 # collection.query(
@@ -430,7 +454,7 @@ def main_old():
 #     if chunk["response"]:
 #         print(chunk["response"], end="", flush=True)
 
-def main():
+def main() -> None:
     ...
 
 if __name__ == "__main__":

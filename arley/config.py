@@ -11,13 +11,13 @@ from cachetools import cached, TTLCache
 from pydantic import BaseModel, Field, HttpUrl, RootModel, PostgresDsn
 
 _CONFIGDIRPATH: Path = Path(__file__).parent.resolve()
-_CONFIGDIRPATH = Path(os.getenv("ARLEY_CONFIG_DIR_PATH")) if os.getenv("ARLEY_CONFIG_DIR_PATH") else _CONFIGDIRPATH
+_CONFIGDIRPATH = Path(os.getenv("ARLEY_CONFIG_DIR_PATH")) if os.getenv("ARLEY_CONFIG_DIR_PATH") else _CONFIGDIRPATH  # type: ignore
 
 _CONFIGPATH: Path = Path(_CONFIGDIRPATH, "config.yaml")
-_CONFIGPATH: Path = Path(os.getenv("ARLEY_CONFIG_PATH")) if os.getenv("ARLEY_CONFIG_PATH") else _CONFIGPATH
+_CONFIGPATH: Path = Path(os.getenv("ARLEY_CONFIG_PATH")) if os.getenv("ARLEY_CONFIG_PATH") else _CONFIGPATH  # type: ignore
 
 _CONFIGLOCALPATH: Path = Path(_CONFIGDIRPATH, "config.local.yaml")
-_CONFIGLOCALPATH = Path(os.getenv("ARLEY_CONFIG_LOCAL_PATH")) if os.getenv("ARLEY_CONFIG_LOCAL_PATH") else _CONFIGLOCALPATH
+_CONFIGLOCALPATH = Path(os.getenv("ARLEY_CONFIG_LOCAL_PATH")) if os.getenv("ARLEY_CONFIG_LOCAL_PATH") else _CONFIGLOCALPATH  # type: ignore
 
 
 from pydantic_settings import (
@@ -38,7 +38,9 @@ logger.remove()  # remove default-handler
 logger_fmt: str = "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
 #
 logger.add(
-    sys.stderr, level=os.getenv("LOGURU_LEVEL"), format=logger_fmt
+    sys.stderr,
+    level=os.getenv("LOGURU_LEVEL"),  # type: ignore
+    format=logger_fmt
 )  # TRACE | DEBUG | INFO | WARN | ERROR |  FATAL
 logger.configure(extra={"classname": "None"})
 
@@ -54,10 +56,10 @@ logger.info(f"EFFECTIVE CONFIGLOCALPATH: {_CONFIGLOCALPATH}")
 
 
 class TemplateType(StrEnum):
-    plain: str = auto()
-    xml: str = auto()
-    plain_chat: str = auto()
-    xml_chat: str = auto()
+    plain = auto()
+    xml = auto()
+    plain_chat = auto()
+    xml_chat = auto()
 
 
 class OllamaPrimingMessage(BaseModel):
@@ -164,9 +166,9 @@ class Settings(BaseSettings):
     def settings_customise_sources(
         cls,
         settings_cls: Type[BaseSettings],
-        init_settings: InitSettingsSource,
-        env_settings: EnvSettingsSource,
-        dotenv_settings: DotEnvSettingsSource,
+        init_settings: InitSettingsSource,  # type: ignore
+        env_settings: EnvSettingsSource,  # type: ignore
+        dotenv_settings: DotEnvSettingsSource,  # type: ignore
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> Tuple[PydanticBaseSettingsSource, ...]:
         return init_settings, env_settings, YamlConfigSettingsSource(settings_cls)
@@ -192,7 +194,7 @@ def is_in_cluster() -> bool:
 
 
 
-def log_settings():
+def log_settings() -> None:
     for k, v in os.environ.items():
         if k.startswith("PSQL_"):
             logger.info(f"ENV::{k}: {v}")
@@ -337,13 +339,13 @@ def get_num_ctx_by_model_name(model_name: str, default_num_ctx: int = 2048) -> i
 
 
 
-settings: Settings = Settings()
+settings: Settings = Settings()  # type: ignore
 
 
 if settings.postgresql.url:
     os.environ["PSQL_DB_URL"] = os.getenv("PSQL_DB_URL", settings.postgresql.url)
 
-os.environ["PSQL_DB_HOST"] = os.getenv("PSQL_DB_HOST", settings.postgresql.host_in_cluster if is_in_cluster() else settings.postgresql.host)
+os.environ["PSQL_DB_HOST"] = os.getenv("PSQL_DB_HOST", settings.postgresql.host_in_cluster if is_in_cluster() else settings.postgresql.host)  # type: ignore
 os.environ["PSQL_DB_USERNAME"] = os.getenv("PSQL_DB_USERNAME", settings.postgresql.username)
 os.environ["PSQL_DB_PASSWORD"] = os.getenv("PSQL_DB_PASSWORD", settings.postgresql.password)
 os.environ["PSQL_DB_NAME"] = os.getenv("PSQL_DB_NAME", settings.postgresql.dbname)
@@ -364,7 +366,7 @@ OLLAMA_FUNCTION_CALLING_MODEL: str = os.getenv(
     "OLLAMA_FUNCTION_CALLING_MODEL", settings.ollama.ollama_function_calling_model
 )
 OLLAMA_GUESS_LANGUAGE_MODEL: str = os.getenv("OLLAMA_GUESS_LANGUAGE_MODEL", settings.ollama.ollama_guess_language_model)
-CHROMADB_DEFAULT_COLLECTION_NAME: str = os.getenv("CHROMADB_DEFAULT_COLLECTION_NAME", settings.chromadb.default_collectionname)
+CHROMADB_DEFAULT_COLLECTION_NAME: str = os.getenv("CHROMADB_DEFAULT_COLLECTION_NAME", settings.chromadb.default_collectionname)  # type: ignore
 
 ARLEY_AUG_UNIFIED: bool = str2bool(os.getenv("ARLEY_AUG_UNIFIED", settings.arley_aug.unified))
 ARLEY_AUG_PER_ITEM: bool = str2bool(os.getenv("ARLEY_AUG_PER_ITEM", settings.arley_aug.per_item))
@@ -381,7 +383,7 @@ ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS: bool = str2bool(os.getenv("ARLEY_AUG
 ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER: bool = str2bool(os.getenv("ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER", settings.arley_aug.first_request_aug_lang_filter))
 REFINELOG_RECIPIENTS: list[str]|None = None
 if os.getenv("REFINELOG_RECIPIENTS"):
-    REFINELOG_RECIPIENTS = os.getenv("REFINELOG_RECIPIENTS").split(",")
+    REFINELOG_RECIPIENTS = os.getenv("REFINELOG_RECIPIENTS").split(",")  # type: ignore
 
 # TODO HT 20240917 -> move to proper pydantic-settings submodel-targeting e.g. "ARLEY_AUG_UNIFIED" -> "ARLEY__AUG_UNIFIED"
 
@@ -394,18 +396,19 @@ TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, TEMPLATE_VERSION)
 
 
 #TODO HT 20250331 also put in settings-class and yaml
-ARLEY_IMAPLOOP_MAX_IDLE_LOOPS: int|None = os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_LOOPS")
-if ARLEY_IMAPLOOP_MAX_IDLE_LOOPS:
-    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS = int(ARLEY_IMAPLOOP_MAX_IDLE_LOOPS)
+ARLEY_IMAPLOOP_MAX_IDLE_LOOPS: int|None = None
+if os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_LOOPS") is not None:
+    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS = int(os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_LOOPS"))  # type: ignore
 else:
     ARLEY_IMAPLOOP_MAX_IDLE_LOOPS = 20
 
 ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE: int = int(os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE", "5"))
 ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP: int = int(os.getenv("ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP", "10"))
 ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP: int = int(os.getenv("ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP", "10"))
-ARLEY_OLLAMALOOP_MAX_LOOPS: int|None = os.getenv("ARLEY_OLLAMALOOP_MAX_LOOPS")
-if ARLEY_OLLAMALOOP_MAX_LOOPS:
-    ARLEY_OLLAMALOOP_MAX_LOOPS = int(ARLEY_OLLAMALOOP_MAX_LOOPS)
+
+ARLEY_OLLAMALOOP_MAX_LOOPS: int|None = None
+if os.getenv("ARLEY_OLLAMALOOP_MAX_LOOPS") is not None:
+    ARLEY_OLLAMALOOP_MAX_LOOPS = int(os.getenv("ARLEY_OLLAMALOOP_MAX_LOOPS"))  # type: ignore
 
 
 logger.info(f"Effective OLLAMA_MODEL: {OLLAMA_MODEL}")
