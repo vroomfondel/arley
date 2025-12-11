@@ -14,7 +14,7 @@ from dbaccess.dbconnection import (
 
 import datetime
 import uuid
-from typing import Optional, List, Self
+from typing import Optional, List, Self, Any, Dict, ClassVar
 
 import sqlalchemy
 from sqlalchemy import text, CursorResult, Connection, MetaData
@@ -53,33 +53,28 @@ LOGME_VERBOSE: bool = True
 # logger.debug(f"{Emails.__table__=}")
 # logger.debug(f"{RawEmails.__table__=}")
 
-
 class ComplexEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj: Any) -> Any:
         if hasattr(obj, "repr_json"):
             return obj.repr_json()
         elif hasattr(obj, "as_string"):
             return obj.as_string()
-        elif type(obj) == uuid.UUID:
-            obj: uuid.UUID
+        elif isinstance(obj, uuid.UUID):
             return str(obj)
-        elif type(obj) == datetime.datetime:
-            obj: datetime.datetime
+        elif isinstance(obj, datetime.datetime):
             return obj.isoformat()  # strftime("%Y-%m-%d %H:%M:%S %Z")
-        elif type(obj) == datetime.date:
-            obj: datetime.date
+        elif isinstance(obj, datetime.date):
             return obj.strftime("%Y-%m-%d")
-        elif type(obj) == datetime.timedelta:
-            obj: datetime.timedelta
+        elif isinstance(obj, datetime.timedelta):
             return str(obj)
         elif isinstance(obj, dict) or isinstance(obj, list):
-            obj: get_pretty_dict_json_no_sort(obj)
-            return obj
+            robj: str = get_pretty_dict_json_no_sort(obj)
+            return robj
         else:
             return json.JSONEncoder.default(self, obj)
 
 
-def get_pretty_dict_json_no_sort(data, indent: int = 4) -> str:
+def get_pretty_dict_json_no_sort(data: Any, indent: int = 4) -> str:
     return json.dumps(data, indent=indent, sort_keys=False, cls=ComplexEncoder, default=str)
 
 
@@ -88,7 +83,12 @@ class DBObjectNEW(DeclarativeBase):
 
 
 class DBObject:
-    logger = logger.bind(classname=f"{__qualname__}")
+    logger: ClassVar = logger.bind(classname=f"{__qualname__}")
+    TIMEZONE: datetime.tzinfo = pytz.timezone("Europe/Berlin")  # may be overriden/changed before use...
+
+    def __init__(self) -> None:
+        self.dbtablename: str|None = None
+        self.dbcolnames: List[str] | None = None
 
     @staticmethod
     def psql_quote_str(input: str) -> str:
@@ -96,13 +96,12 @@ class DBObject:
             return input
         return input.replace("'", "''")  # double-quotation is psql-style - aight ?!
 
-    def __init__(self):
-        super(DBObject, self).__init__()
 
-    def __repr__(self):
+
+    def __repr__(self) -> str:
         return f"I am a {self.__class__.__qualname__}. ({self.__dir__()}"
 
-    def repr_json(self):
+    def repr_json(self) -> Dict:
         ret: dict = {}
         for k in self.__dict__:
             v = self.__dict__[k]
@@ -124,7 +123,7 @@ class DBObject:
     #     return json.dumps(self, default=lambda o: o.__dict__,
     #                       sort_keys=True, indent=4)
 
-    def from_result_set_next_row(self, rs: sqlalchemy.engine.cursor.Result, colnames: List = None) -> Self:
+    def from_result_set_next_row(self, rs: sqlalchemy.engine.cursor.Result, colnames: List|None = None) -> Self|None:
         """
         Returns the object with the attributes set to the "contents" of the ResultSet
             Parameters:
@@ -164,12 +163,13 @@ class DBObject:
 
         return self
 
-    def save(self) -> DBObjectInsertUpdateDeleteResult:
+    def save(self) -> DBObjectInsertUpdateDeleteResult|None:
         savesql: StringIO = StringIO()
         savesql.write(f"update {self.dbtablename} set ")
 
         cndict: dict = {}
 
+        assert self.dbcolnames
         for i, cn in enumerate(self.dbcolnames):
             if i > 0:
                 savesql.write(", ")
@@ -185,7 +185,7 @@ class DBObject:
         if LOGME_VERBOSE:
             self.logger.debug(f"{savesql.getvalue()=} {cndict=}")
 
-        result: DBObjectInsertUpdateDeleteResult = self.insertupdatedelete(
+        result: DBObjectInsertUpdateDeleteResult|None = self.insertupdatedelete(
             savesql.getvalue(),
             **cndict
         )
@@ -193,7 +193,7 @@ class DBObject:
         return result
 
     @classmethod
-    def insertupdatedelete(cls, sqlstr: str, **kwargs) -> Optional[DBObjectInsertUpdateDeleteResult]:
+    def insertupdatedelete(cls, sqlstr: str, **kwargs: Any) -> Optional[DBObjectInsertUpdateDeleteResult]:
         # https://chartio.com/resources/tutorials/how-to-execute-raw-sql-in-sqlalchemy/
         # https://stackoverflow.com/questions/36524293/inserting-into-postgres-database-from-sqlalchemy
 
@@ -206,7 +206,7 @@ class DBObject:
 
                 # DBObject.logger.debug(f"{get_compiled_sql(sql.text, **kwargs)=}")
 
-                rs: CursorResult = conn.execute(sql, kwargs)
+                rs = conn.execute(sql, kwargs)
                 # DBObject.logger.debug(f"{type(rs)=}")
                 # DBObject.logger.debug(f"{rs.rowcount=}")
                 # DBObject.logger.debug(f"{rs=}")
@@ -214,7 +214,8 @@ class DBObject:
                 ex = exX
                 # raise exX
 
-            ret: DBObjectInsertUpdateDeleteResult = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
+            assert rs
+            ret: DBObjectInsertUpdateDeleteResult|None = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
 
             return ret
 
@@ -236,7 +237,7 @@ class DBObject:
         keys: sqlalchemy.engine.result.RMKeyView = rs.keys()
 
         while True:
-            row: Self = cls().from_result_set_next_row(rs, list(keys))
+            row: Self|None = cls().from_result_set_next_row(rs, list(keys))
             if row is None:
                 break
 
@@ -245,14 +246,14 @@ class DBObject:
         return retData
 
     @classmethod
-    def get_list_from_sql(cls, sqlstr: str, **kwargs) -> List[Self]:
+    def get_list_from_sql(cls, sqlstr: str, **kwargs: Any) -> List[Self]:
         with DBConnectionEngine.get_instance().connect() as conn:
             sql = text(sqlstr)
             rs: sqlalchemy.engine.cursor.Result = conn.execute(sql, **kwargs)
             return cls.get_result_set_to_list(rs)
 
     @classmethod
-    def get_one_from_sql(cls, sqlstr: str, **kwargs) -> Self:
+    def get_one_from_sql(cls, sqlstr: str, **kwargs: Any) -> Self|None:
         # cls.logger.debug(f"{cls.__name__=}")
 
         conn: Connection
@@ -280,6 +281,7 @@ class DBObject:
         vsql: str = ""
         vhash: dict = {}
 
+        assert self.dbcolnames
         for index, colname in enumerate(self.dbcolnames):
             if index > 0:
                 savesql = savesql + ", "
@@ -293,14 +295,14 @@ class DBObject:
                 v2: datetime.datetime = v
                 v = v2.strftime("%Y-%m-%dT%H:%M:%S.%f")
             elif isinstance(v, StrEnum):
-                v2: StrEnum = v
-                v = v2.value
+                v3: StrEnum = v
+                v = v3.value
             elif isinstance(v, dict) or isinstance(v, list):
-                v2: dict | list = v
-                v = get_pretty_dict_json_no_sort(v2)
+                v4: dict | list = v
+                v = get_pretty_dict_json_no_sort(v4)
             elif isinstance(v, uuid.UUID):
-                v2: uuid.UUID = v
-                v = str(v2)
+                v5: uuid.UUID = v
+                v = str(v5)
 
             vhash[colname] = v
 
@@ -309,7 +311,7 @@ class DBObject:
         if LOGME_VERBOSE:
             self.logger.debug(f"{savesql=} {vhash=}")
 
-        result: DBObjectInsertUpdateDeleteResult = self.insertupdatedelete(savesql, **vhash)
+        result: DBObjectInsertUpdateDeleteResult|None = self.insertupdatedelete(savesql, **vhash)
 
         # traceback.print_tb(result.getException())
         # print("Result.exceptionOccured: ", result.exceptionOccured())

@@ -37,14 +37,14 @@ ONLY_MAILS_FROM_PRIVILEGED_SENDER: bool = False
 class IMAPAdapter:
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.imapclient: IMAPClient = IMAPClient(settings.emailsettings.imapserver, port=settings.emailsettings.imapport, use_uid=True, ssl=False)
 
-    def logout(self):
+    def logout(self) -> None:
         self.imapclient.logout()
         # setting self.imapclient to None ?!
 
-    def login(self):
+    def login(self) -> None:
         self.imapclient.starttls()
         resp: list = self.imapclient.login(settings.emailsettings.mailuser, settings.emailsettings.mailpassword)
 
@@ -72,7 +72,7 @@ class IMAPAdapter:
             flags, delim, name = fol
             if LOGME_VERBOSE:
                 self.logger.debug(f"FOLDER: {type(flags)=} {flags=}\t{type(delim)=} {delim=}\t{type(name)=} {name=}")
-            ret.append(name)
+            ret.append(str(name))
 
         return ret
 
@@ -113,7 +113,7 @@ class IMAPAdapter:
             else:
                 raise RuntimeError(f"IMAP FOLDER CREATION FAILED {name} => {resp_str=}")
 
-    def ensure_base_folders(self, parent_folder: str = ""):
+    def ensure_base_folders(self, parent_folder: str = "") -> None:
         need: set = set()
         for name, value in settings.emailsettings.folders.model_fields.items():
             actual_name: str = getattr(settings.emailsettings.folders, name)
@@ -185,28 +185,29 @@ class IMAPAdapter:
 
         email_message: EmailMessage = email.message_from_bytes(message_data[b"RFC822"])  # type: ignore
 
-        subject: str = MyEmailMessage.decode_my_header(email_message.get("Subject"))
+        subject: str|None = MyEmailMessage.decode_my_header(email_message.get("Subject"))
 
-        from_email: str = parseaddr(MyEmailMessage.decode_my_header(email_message.get("From")))[1]
-        to_email: str = parseaddr(MyEmailMessage.decode_my_header(email_message.get("To")))[1]  # Delivered-to
-        envelope_message_id: str = MyEmailMessage.decode_my_header(email_message.get("Message-ID")).rstrip().lstrip()
+        from_email: str|None = parseaddr(MyEmailMessage.decode_my_header(email_message.get("From")))[1]  # type: ignore
+        to_email: str|None = parseaddr(MyEmailMessage.decode_my_header(email_message.get("To")))[1]  # type: ignore # Delivered-to
+        envelope_message_id: str|None = MyEmailMessage.decode_my_header(email_message.get("Message-ID")).rstrip().lstrip()  # type: ignore
         if LOGME_VERBOSE:
             self.logger.debug(f"{msgid=} {envelope_message_id=}\t{from_email=} {to_email=} {subject=}")
 
         # only debug-info here...
-        in_reply_to: str = MyEmailMessage.decode_my_header(email_message.get("In-Reply-To"))
+        in_reply_to: str|None = MyEmailMessage.decode_my_header(email_message.get("In-Reply-To"))
         if in_reply_to:
             in_reply_to = in_reply_to.rstrip().lstrip()
         if LOGME_VERBOSE:
             self.logger.debug(f"{in_reply_to=}")
 
-        references: str = MyEmailMessage.decode_my_header(email_message.get("References"))
+        references: str|None = MyEmailMessage.decode_my_header(email_message.get("References"))
         if references:
             references = references.rstrip().lstrip()
         if LOGME_VERBOSE:
             self.logger.debug(f"{references=}")
 
 
+        assert from_email is not None and to_email is not None and subject is not None and envelope_message_id is not None
         ret = MyEmailMessage(
             msgid=msgid,
             email_message=email_message,
@@ -284,8 +285,8 @@ class IMAPAdapter:
 
             self.logger.debug(
                 uid,
-                IMAPAdapter.decode_my_header(email_message.get("From")),
-                IMAPAdapter.decode_my_header(email_message.get("Subject")),
+                MyEmailMessage.decode_my_header(email_message.get("From")),
+                MyEmailMessage.decode_my_header(email_message.get("Subject")),
             )
             ret.append(email_message)
 
@@ -349,7 +350,7 @@ class IMAPAdapter:
     def move_mail_to_err(self, msgid: int, folder_src: str = "INBOX") -> None:
         self.move_mail(msgid, folder_src=folder_src, folder_dst=settings.emailsettings.folders.err)
 
-    def process_email(self, sender: str, mymail: MyEmailMessage):
+    def process_email(self, sender: str, mymail: MyEmailMessage) -> None:
         mymail.print_info()
 
         # 1. move email to "working"-directory
@@ -384,11 +385,12 @@ class IMAPAdapter:
             ex: Exception = Exception("could not create email-entry in db")
             self.logger.error(ex)
 
+        assert aeid is not None
         areid: ArleyRawEmailInDB | None = ArleyRawEmailInDB.insert_rawemail_from_myemail(myemail=mymail, arleyemailindb=aeid)
         if not areid:
             # TODO HT 20240714 handle exception properly
-            ex: Exception = Exception("could not create email-entry in db")
-            self.logger.error(ex)
+            ex2: Exception = Exception("could not create email-entry in db")
+            self.logger.error(ex2)
 
         # 4. if needed, create arley-id folder in "old"
         need: set[str] = {f"{settings.emailsettings.folders.old}.{str(aeid.rootemailid)}"}
@@ -414,7 +416,7 @@ class IMAPAdapter:
         # self.logger.debug(f"{type(latest_rep)=}")
         # self.logger.debug(f"{latest_rep=}")
 
-    def work_inbox(self, timeout_if_exception_occured: int = 10):
+    def work_inbox(self, timeout_if_exception_occured: int = 10) -> None:
         mails: list[tuple[int, Envelope]] = self.list_mails()
 
         for mt in mails:
@@ -433,8 +435,9 @@ class IMAPAdapter:
                     # skip
                     continue
 
-                mymail: MyEmailMessage = self.get_message(msgid)
-                self.process_email(sender, mymail)
+                mymail: MyEmailMessage|None = self.get_message(msgid)
+                if mymail is not None:
+                    self.process_email(sender, mymail)
             except Exception as ex:
                 self.logger.exception(ex)
                 self.logger.info(f"sleeping {timeout_if_exception_occured}s after error occured")
@@ -483,7 +486,7 @@ def main(
 
     return None
 
-def testmode():
+def testmode() -> None:
     ima: IMAPAdapter = IMAPAdapter()
     ima.login()
 

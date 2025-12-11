@@ -24,7 +24,7 @@ from arley.emailinterface.ollamaemailreply import OllamaEmailReply
 _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 
 
-def adapt_emails_ollama_msgs():
+def adapt_emails_ollama_msgs() -> None:
     # generate_msgs_for_ollama
     # select length(ollamamsgs::text),emailid,ollamamsgs from emails where length(ollamamsgs::text)>2;
     emailsindb_from_arley: list[ArleyEmailInDB] = ArleyEmailInDB.get_list_from_sql("select * from emails where fromarley and processresult='processed' order by received desc")
@@ -41,11 +41,14 @@ def adapt_emails_ollama_msgs():
         initial_prompt = previous[0].mailbody
 
         for prev in previous:
+            assert prev.mailbody is not None
+            assert prev.fromarley is not None
             previous_texts.append((prev.mailbody, prev.fromarley))
 
         # das hier ist ja strenggenommen die antwort -> in mailindb.mailbody drin
         # previous_texts.append((emailindb.mailbody, emailindb.fromarley))
 
+        assert initial_topic
         msgs: list[Message] = OllamaEmailReply.generate_msgs_for_ollama(lang="de", previous_texts=previous_texts, initial_topic=initial_topic)
         logger.debug(msgs)
         # email_message: EmailMessage = email.message_from_string(rawemail.rawemail)  # type: ignore
@@ -55,7 +58,7 @@ def adapt_emails_ollama_msgs():
         # if msgs:
         #     break
 
-def adapt_rawemails():
+def adapt_rawemails() -> None:
     rawemailsindb: list[ArleyRawEmailInDB] = ArleyRawEmailInDB.get_list_from_sql("select * from rawemails")
     for rawemail in rawemailsindb:
         email_message: EmailMessage = email.message_from_string(rawemail.rawemail)  # type: ignore
@@ -86,8 +89,9 @@ def adapt_rawemails():
         )
         logger.debug(f"Date: {type(rdd)=}\t{rdd=}")
 
-        aeid: ArleyEmailInDB = ArleyEmailInDB.get_one_from_sql(f"select * from emails where emailid='{rawemail.emailid}'")
+        aeid: ArleyEmailInDB|None = ArleyEmailInDB.get_one_from_sql(f"select * from emails where emailid='{rawemail.emailid}'")
 
+        assert aeid
         aeid.received = rd
         if not aeid.received:
             aeid.received = rdd
@@ -98,7 +102,7 @@ def adapt_rawemails():
 
 
 
-def check():
+def check() -> None:
     ima: IMAPAdapter = IMAPAdapter()
     ima.login()
 
@@ -112,7 +116,10 @@ def check():
                 logger.debug(f"{'*' * 50}")
                 logger.debug(f"{msgid=}")
                 logger.debug(env)
-                myemail: MyEmailMessage = ima.get_message(msgid, folder=folder)
+                myemail: MyEmailMessage|None = ima.get_message(msgid, folder=folder)
+                if not myemail:
+                    continue
+
                 myemail.get_in_reply_to()
                 # logger.debug(Helper.get_pretty_dict_json_no_sort())
 

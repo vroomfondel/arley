@@ -48,7 +48,7 @@ class LanguageGuesser:
                        print_request: bool = False,
                        print_http_response: bool = False,
                        print_http_request: bool = False,
-                       max_retries: int = 3) -> str | tuple[str, dict, dict] | None:
+                       max_retries: int = 3) -> Literal['de','en'] | tuple[Literal['de','en'], dict, dict] | None:
 
         if ollama_options is None:
             ollama_options = get_ollama_options(model=ollama_model)

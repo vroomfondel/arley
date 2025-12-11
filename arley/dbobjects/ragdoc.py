@@ -105,8 +105,8 @@ class ArleyDocumentInformation(BaseModel):
                                      doctype: str,
                                      parent_id: UUID | None = None,
                                      parent_file_name: str | None = None,
-                                     parent_full_path: Path | None = None) -> Self | None:
-        yaml_data: dict = None
+                                     parent_full_path: Path | None = None) -> "ArleyDocumentInformation | None":
+        yaml_data: dict|None = None
         with open(yaml_file) as stream:
             try:
                 yaml = ruamel.yaml.YAML(typ='safe', pure=True)
@@ -150,7 +150,7 @@ class ArleyDocumentInformation(BaseModel):
                                 md5: str,
                                 parent_id: UUID | None = None,
                                 parent_file_name: str | None = None,
-                                parent_full_path: Path | None = None) -> Self:
+                                parent_full_path: Path | None = None) -> "ArleyDocumentInformation":
 
 
         docid: UUID = uuid.uuid4()
@@ -182,7 +182,7 @@ class ArleyDocumentInformation(BaseModel):
             relevance=yaml_data["Relevanz"],
             sentiment=SentimentEnum[yaml_data["Sentiment"].lower()],
             targeted_by_prompts=targeted_by_prompts,
-            additional_notes=additional_notes,
+            additional_notes=additional_notes,  # type: ignore
             titles=titles
         )
 

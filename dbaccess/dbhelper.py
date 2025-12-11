@@ -13,15 +13,16 @@ from sqlalchemy.sql.schema import Table
 # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflecting-all-tables-at-once
 
 
-def as_valid_uuid4(cls, uuid_to_test: str) -> Optional[uuid4]:
+def as_valid_uuid4(uuid_to_test: str) -> Optional[UUID]:
     try:
-        ret: uuid4 = UUID(uuid_to_test, version=4)
+        ret: UUID = UUID(uuid_to_test, version=4)
         return ret
     except ValueError:
         return None
 
 
-def main(): ...
+def main() -> None:
+    ...
 
 
 # meta = MetaData()

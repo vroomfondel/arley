@@ -9,7 +9,7 @@ from email import utils
 from email.headerregistry import Address
 from enum import StrEnum, auto
 from io import StringIO
-from typing import List, Optional, Callable, Self, Literal, get_args
+from typing import List, Optional, Callable, Self, Literal, get_args, ClassVar
 from uuid import UUID
 
 import pytz
@@ -258,6 +258,8 @@ fart = sqlalchemy.engine.default.DefaultExecutionContext.get_result_processor
 
 
 class ArleyEmailInDBNEW(DBObjectNEW):
+    logger: ClassVar = logger.bind(classname=f"{__qualname__}")
+
     __tablename__ = "emails"
 
     emailid: Mapped[UUID] = mapped_column(primary_key=True)
@@ -288,7 +290,7 @@ class ArleyEmailInDBNEW(DBObjectNEW):
     ollamamsgs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
 
-    def sanitize_header_fields(self):
+    def sanitize_header_fields(self) -> None:
         if self.envelopeemailid:
             self.envelopeemailid = self.envelopeemailid.replace("\n", "").replace("\r", "").strip()
 
@@ -302,16 +304,17 @@ class ArleyEmailInDBNEW(DBObjectNEW):
             self.subject = self.subject.replace("\n", "").replace("\r", "")
 
     @classmethod
-    def insert_from_myemail(cls, myemail: MyEmailMessage, rootemailid: UUID | None = None, arley_email: str = settings.emailsettings.mailaddress, lang: Literal['de', 'en'] = "de") -> Self | None:
+    def insert_from_myemail(cls, myemail: MyEmailMessage, rootemailid: UUID | None = None, arley_email: str = settings.emailsettings.mailaddress, lang: Literal['de', 'en'] = "de") -> "ArleyEmailInDBNEW | None":
         # TODO HT 20240920 REWRITE TO SQLALCHEMY LOGIC!!!
 
         sequencenumber: int = 0
         if rootemailid is not None:
             sql: str = f"select count(*) as countme from emails where rootemailid='{rootemailid}'"
             cls.logger.debug(f"{sql=}")
-            rs: dict = dbaccess.dbconnection.exec_one_line(sql)
+            rs: dict|None = dbaccess.dbconnection.exec_one_line(sql)
             cls.logger.debug(rs)
-            sequencenumber = rs["countme"]
+            if rs is not None:
+                sequencenumber = rs["countme"]
 
         aeid: ArleyEmailInDBNEW = ArleyEmailInDBNEW()
         aeid.emailid = uuid.uuid4()
@@ -319,15 +322,19 @@ class ArleyEmailInDBNEW(DBObjectNEW):
         aeid.processed = False
         aeid.processresult = Result.pending
 
-        aeid.received = myemail.get_date_from_last_received_header()
-        if not aeid.received:
-            aeid.received = myemail.get_date_from_date_header()
+        received: datetime.datetime|None = myemail.get_date_from_last_received_header()
+        if received is None:
+            received = myemail.get_date_from_date_header()
+
+        if received is not None:
+            aeid.received = received
+
 
         if not aeid.received:
             aeid.received = datetime.datetime.now(tz=DBObject.TIMEZONE)
 
         aeid.rootemailid = rootemailid if rootemailid else aeid.emailid  # self-root-email...
-        aeid.isrootemail = False if rootemailid else True
+        aeid.isrootemailid = False if rootemailid else True
 
         aeid.frommail = myemail.from_email
         aeid.tomail = myemail.to_email
@@ -341,23 +348,29 @@ class ArleyEmailInDBNEW(DBObjectNEW):
 
         aeid.envelopeemailid = myemail.envelope_message_id.strip()  #utils.make_msgid(domain=Address(addr_spec=aeid.frommail).domain)
 
-        aeid.mailbody = myemail.get_latest_reply()
+        mb: str|None = myemail.get_latest_reply()
+        if mb is not None:
+            aeid.mailbody = mb
         aeid.ollamamsgs = {}
         aeid.ollamaresponse = {}
 
         aeid.sanitize_header_fields()
 
         # TODO HT 20240920 REWRITE TO SQLALCHEMY LOGIC!!!
-        res: DBObjectInsertUpdateDeleteResult | None = aeid.insertnew()
-        logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
+        if hasattr(aeid, "insertnew"):
+            res: DBObjectInsertUpdateDeleteResult | None = aeid.insertnew()
+            if res is not None:
+                logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
 
-        if res.exception_occured():
-            logger.error(Helper.get_exception_tb_as_string(res.get_exception()))
-            return None
+            if res is not None and res.exception_occured():
+                exme: Exception|None = res.get_exception()
+                if exme is not None:
+                    logger.error(Helper.get_exception_tb_as_string(exme))
+                return None
 
-        # rs: ArleyEmailInDB = ArleyEmailInDB.get_one_from_sql("select * from emails limit 1")
-        # logger.debug(f"{type(rs)=} {rs=}")
-        # logger.debug(Helper.get_pretty_dict_json_no_sort(rs.repr_json()))
+            # rs: ArleyEmailInDB = ArleyEmailInDB.get_one_from_sql("select * from emails limit 1")
+            # logger.debug(f"{type(rs)=} {rs=}")
+            # logger.debug(Helper.get_pretty_dict_json_no_sort(rs.repr_json()))
 
         return aeid
 
@@ -386,7 +399,7 @@ class ArleyEmailInDB(DBObject):
         "ollamamsgs"
     ]  # all lowercase - otherwise will need to quote!!!
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.emailid: Optional[UUID] = None
         self.received: Optional[datetime.datetime] = None
         self.processed: Optional[bool] = None
@@ -409,7 +422,7 @@ class ArleyEmailInDB(DBObject):
 
         super(ArleyEmailInDB, self).__init__()
 
-    def sanitize_header_fields(self):
+    def sanitize_header_fields(self) -> None:
         if self.envelopeemailid:
             self.envelopeemailid = self.envelopeemailid.replace("\n", "").replace("\r", "").strip()
 
@@ -423,14 +436,15 @@ class ArleyEmailInDB(DBObject):
             self.subject = self.subject.replace("\n", "").replace("\r", "")
 
     @classmethod
-    def insert_from_myemail(cls, myemail: MyEmailMessage, rootemailid: UUID | None = None, arley_email: str = settings.emailsettings.mailaddress, lang: Literal['de', 'en'] = "de") -> Self | None:
+    def insert_from_myemail(cls, myemail: MyEmailMessage, rootemailid: UUID | None = None, arley_email: str = settings.emailsettings.mailaddress, lang: Literal['de', 'en'] = "de") -> "ArleyEmailInDB | None":
         sequencenumber: int = 0
         if rootemailid is not None:
             sql: str = f"select count(*) as countme from emails where rootemailid='{rootemailid}'"
             cls.logger.debug(f"{sql=}")
-            rs: dict = dbaccess.dbconnection.exec_one_line(sql)
+            rs: dict|None = dbaccess.dbconnection.exec_one_line(sql)
             cls.logger.debug(rs)
-            sequencenumber = rs["countme"]
+            if rs is not None:
+                sequencenumber = rs["countme"]
 
         aeid: ArleyEmailInDB = ArleyEmailInDB()
         aeid.emailid = uuid.uuid4()
@@ -461,17 +475,18 @@ class ArleyEmailInDB(DBObject):
         aeid.envelopeemailid = myemail.envelope_message_id.strip()  #utils.make_msgid(domain=Address(addr_spec=aeid.frommail).domain)
 
         aeid.mailbody = myemail.get_latest_reply()
-        aeid.ollamamsgs = {}
+        aeid.ollamamsgs = list()
         aeid.ollamaresponse = {}
 
         aeid.sanitize_header_fields()
 
         res: DBObjectInsertUpdateDeleteResult | None = aeid.insertnew()
-        logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
+        if res is not None:
+            logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
 
-        if res.exception_occured():
-            logger.error(Helper.get_exception_tb_as_string(res.get_exception()))
-            return None
+            if res.exception_occured():
+                logger.error(Helper.get_exception_tb_as_string(res.get_exception()))
+                return None
 
         # rs: ArleyEmailInDB = ArleyEmailInDB.get_one_from_sql("select * from emails limit 1")
         # logger.debug(f"{type(rs)=} {rs=}")
@@ -504,15 +519,15 @@ class ArleyRawEmailInDB(DBObject):
         "textmailbody"
     ]  # all lowercase - otherwise will need to quote!!!
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.emailid: Optional[UUID] = None
         self.rawemail: Optional[str] = None
         self.textmailbody: Optional[str] = None
 
-        super(ArleyRawEmailInDB, self).__init__()
+        super().__init__()
 
     @classmethod
-    def insert_rawemail_from_myemail(cls, myemail: MyEmailMessage, arleyemailindb: ArleyEmailInDB) -> Self | None:
+    def insert_rawemail_from_myemail(cls, myemail: MyEmailMessage, arleyemailindb: ArleyEmailInDB) -> "ArleyRawEmailInDB | None":
         aeid: ArleyRawEmailInDB = ArleyRawEmailInDB()
         aeid.emailid = arleyemailindb.emailid
         aeid.rawemail = myemail.email_message.as_string()
@@ -520,9 +535,10 @@ class ArleyRawEmailInDB(DBObject):
         aeid.textmailbody = myemail.get_textbody()
 
         res: DBObjectInsertUpdateDeleteResult | None = aeid.insertnew()
-        logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
+        if res is not None:
+            logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
 
-        if res.exception_occured():
+        if res is not None and res.exception_occured():
             logger.error(Helper.get_exception_tb_as_string(res.get_exception()))
             return None
 
@@ -552,7 +568,7 @@ class ArleyRawEmailInDB(DBObject):
 
 
 
-def run_new():
+def run_new() -> None:
     dburl: str = sqlalchemy.engine.url.URL.create(
                 drivername="postgresql+psycopg2",
                 username=settings.postgresql.username,
@@ -594,21 +610,22 @@ def run_new():
     # ...     session.commit()
 
 
-def run_old():
+def run_old() -> None:
 
     r = ArleyEmailInDB.get_one_from_sql(f"select * from emails where emailid='842137ab-fb46-4b9f-8236-f8e03226d32e'")
-    logger.debug(Helper.get_pretty_dict_json_no_sort(r.repr_json()))
+    if r is not None:
+        logger.debug(Helper.get_pretty_dict_json_no_sort(r.repr_json()))
 
     exit(0)
 
-    undef: Result = Result.failed
-    print(f"{type(undef)=}\t{undef=}")
-
-    testdata: ArleyEmailInDB = test_insert()
-
-    time.sleep(10)
-    testdata.processresult = Result.working
-    testdata.save()
+    # undef: Result = Result.failed
+    # print(f"{type(undef)=}\t{undef=}")
+    #
+    # testdata: ArleyEmailInDB = test_insert()
+    #
+    # time.sleep(10)
+    # testdata.processresult = Result.working
+    # testdata.save()
 
 
 if __name__ == "__main__":
