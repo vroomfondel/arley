@@ -1,6 +1,6 @@
 import json
 from io import StringIO
-from typing import Literal
+from typing import Literal, List
 
 import instructor
 import openai
@@ -66,7 +66,7 @@ class LanguageGuesser:
             print_response=print_response
         )
 
-        msgs: list[dict] = cls._get_guess_language_priming_history(new_content=input_text, include_examples=False)
+        msgs: List[Message] = cls._get_guess_language_priming_history(new_content=input_text, include_examples=False)
         if print_msgs:
             logger.debug(Helper.get_pretty_dict_json_no_sort(msgs))
 
@@ -76,7 +76,7 @@ class LanguageGuesser:
         resp, comp = instructor_client.create_with_completion(
             stream=False,
             model=ollama_model,
-            messages=msgs,
+            messages=msgs,  # type: ignore
             response_model=LanguageGuessResponseSchema,
             max_retries=max_retries
         )
@@ -96,8 +96,8 @@ class LanguageGuesser:
 
 
     @staticmethod
-    def _get_guess_language_priming_history(new_content: str | None = None, include_examples: bool = False) -> list[dict]:  # list[Message]:
-        msgs: list[Message] = []
+    def _get_guess_language_priming_history(new_content: str | None = None, include_examples: bool = False) -> List[Message]:
+        msgs: List[Message] = []
 
         system_pr: StringIO = StringIO()
 
@@ -108,10 +108,7 @@ class LanguageGuesser:
         # f'If I am unsure, I will just make an educated guess, but I will absolutely make sure to only answer with "lang" being either "en" or "de" under any circumstance.\n'
 
         msgs.append(
-            {
-                "role": "system",
-                "content": system_pr.getvalue()
-            }
+            Message(role="system",content=system_pr.getvalue())
         )
 
         if include_examples:
@@ -125,26 +122,20 @@ class LanguageGuesser:
             ]
 
             for meinput, lang in zip(inputs, langs):
-                msgs.append({"role": "user", "content": meinput})
+                msgs.append(Message(role="user", content=meinput))
 
                 r1: LanguageGuessResponseSchema = LanguageGuessResponseSchema(
-                    language_detected=LangDetect(lang=lang),
+                    language_detected=LangDetect(lang=lang),  # type: ignore
                     input_supplied=LangInputSupplied(input=meinput)
                 )
 
                 msgs.append(
-                    {
-                        "role": "assistant",
-                        "content": json.dumps(r1.model_dump(mode="json"), indent=2, default=str)
-                    }
+                    Message(role="assistant", content=json.dumps(r1.model_dump(mode="json"), indent=2, default=str))
                 )
 
         if new_content:
             msgs.append(
-                {
-                    "role": "user",
-                    "content": new_content
-                }
+                Message(role="user",content=new_content)
             )
 
         return msgs
@@ -152,7 +143,7 @@ class LanguageGuesser:
 
 
 if __name__ == "__main__":
-    langcode: str = LanguageGuesser.guess_language(
+    langcode: str = LanguageGuesser.guess_language(  # type: ignore
         input_text="mietvertrag garage\nbitte erstell mir einen mietvertrag für die vermietung einer garage, die\nnicht als wohnraum genutzt werden darf. kündigungsfrist",
         # input_text="terrified terrier eats alone in the dark",
         only_return_str=True,

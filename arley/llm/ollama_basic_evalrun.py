@@ -239,9 +239,6 @@ def lang_eval(
         lang_results[langq] = {}
         this_lang_eval_start = time.perf_counter()
 
-        lang: str
-        ollama_response: dict
-        lang_detect_content: str
 
         res = LanguageGuesser.guess_language(input_text=langq, only_return_str=False, ollama_host=OLLAMA_HOST,
                                              ollama_model=model, ollama_options=get_ollama_options(model),
@@ -249,7 +246,7 @@ def lang_eval(
                                              print_http_request=False, max_retries=3)
 
         if res:
-            lang, ollama_response, lang_detect_content = res
+            lang, ollama_response, lang_detect_content = res  # type: ignore
         else:
             raise RuntimeError("WOOHOO")
 
@@ -393,10 +390,10 @@ def basic_evalrun(model: str = "llama3:latest", lang_ollama_return_format: Liter
 
     preload: dict = {}
     ret["preload"] = preload
-    preload["total_duration_s"] = resp["total_duration"] / 1_000_000_000
-    preload["load_duration_s"] = resp["load_duration"] / 1_000_000_000
-    preload["prompt_eval_duration_s"] = resp["prompt_eval_duration"] / 1_000_000_000
-    preload["eval_duration_s"] = resp["eval_duration"] / 1_000_000_000
+    preload["total_duration_s"] = resp["total_duration"] / 1_000_000_000  # type: ignore
+    preload["load_duration_s"] = resp["load_duration"] / 1_000_000_000  # type: ignore
+    preload["prompt_eval_duration_s"] = resp["prompt_eval_duration"] / 1_000_000_000  # type: ignore
+    preload["eval_duration_s"] = resp["eval_duration"] / 1_000_000_000  # type: ignore
 
     ##################
     ### lang_eval_stuff

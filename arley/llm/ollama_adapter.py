@@ -1,7 +1,7 @@
 import textwrap
 from functools import partial
 from pathlib import Path
-from typing import Union
+from typing import Union, TextIO, Dict
 
 # if TYPE_CHECKING:
 #     from _typeshed import SupportsWrite
@@ -11,7 +11,7 @@ from io import StringIO
 from jinja2 import Environment, FileSystemLoader
 # from pprint import pprint
 
-from ollama import Message
+from ollama import Message, EmbeddingsResponse
 from ollama import Tool
 
 from arley import Helper
@@ -186,7 +186,7 @@ def ask_ollama_chat(
     print_msgs: bool = False,
     print_response: bool = False,
     # context_in: Optional[Sequence[int]] = None,
-    streamed_print_to_io: "SupportsWrite[str] | None" = sys.stdout,
+    streamed_print_to_io: TextIO|Any|None = sys.stdout,
     print_options: bool = False,
     keep_alive: int = 300,  # was: -1
     max_tries_ollama_done_response: int = 21,
@@ -239,19 +239,19 @@ def ask_ollama_chat(
         logger.debug(Helper.get_pretty_dict_json_no_sort(options))
 
     # options = None
-    keep_alive: float = keep_alive  # default: 300  # 0: direkt wieder aus dem gpu löschen | -1: keep forever
+    keep_alive = keep_alive  # default: 300  # 0: direkt wieder aus dem gpu löschen | -1: keep forever
     if evict:
         keep_alive = 0
 
     msgs: list[Message] = []
     if system_prompt:
-        msgs.append({"role": "system", "content": system_prompt})
+        msgs.append(Message(role="system", content=system_prompt))
 
     if msg_history:
         for it in msg_history:
             msgs.append(it)
 
-    msgs.append({"role": "user", "content": prompt})
+    msgs.append(Message(role="user", content=prompt))
 
     # if not msg_history and not system_prompt:
     #     raise RuntimeError("Neither msg_history nor system_prompt is given...")
@@ -338,12 +338,12 @@ def ask_ollama_chat(
                 break
 
 
-    if ret is None and chunk is not None and out is not None:
+    if ret is None and chunk is not None and out is not None:  # type: ignore
         ret = {}
 
-        ret.update(chunk)
-        ret["message"]["content"] = out.getvalue()
-        ret["chunk_count"] = chunkidx + 1
+        ret.update(chunk)  # type: ignore
+        ret["message"]["content"] = out.getvalue()  # type: ignore
+        ret["chunk_count"] = chunkidx + 1  # type: ignore
         ret["CHUNK_RESP_RESPONSE"] = True
 
 
@@ -353,7 +353,7 @@ def ask_ollama_chat(
     return ret
 
 
-def get_available_models():
+def get_available_models() -> None:
     # curl http://localhost:11434/api/tags
     # "models": [
     #     {
@@ -402,10 +402,7 @@ def _get_fc_call_generate_priming_history(function_schema: dict, toolstring: str
     )
 
     msgs.append(
-        {
-            "role": "system",
-            "content": system_pr.getvalue()
-        }
+        Message(role="system", content=system_pr.getvalue())
     )
 
     fc_questions: dict = {
@@ -447,19 +444,13 @@ def _get_fc_call_generate_priming_history(function_schema: dict, toolstring: str
     }
 
     for fcq in fc_questions:
+        msgs.append(Message(role="user", content=fcq))
+
         msgs.append(
-            {
-                "role": "user",
-                "content": fcq,
-            }
-        )
-        msgs.append(
-            {
-                "role": "assistant",
-                "content": Helper.get_pretty_dict_json_no_sort(
-                    fc_questions[fcq]
-                ),
-            }
+            Message(
+                role="assistant",
+                content=Helper.get_pretty_dict_json_no_sort(fc_questions[fcq])
+            )
         )
 
         if allow_backticked_json:
@@ -548,7 +539,7 @@ def function_call_generate(
 
     previous_responses: list[dict] = []
     for i in range(max_retries_json_response_parse):
-        response: dict | None = None
+        response: Dict|Mapping[str, Any] | Iterator[Mapping[str, Any]] | None = None
         try:
             response = ask_ollama_chat(
                 streamed=False,
@@ -571,6 +562,9 @@ def function_call_generate(
 
             # logger.debug(Helper.get_pretty_dict_json_no_sort(response))
 
+            if response is None or not isinstance(response, dict):
+                continue
+
             response["try_num"] = i + 1
 
             cr: str = response["message"]["content"]
@@ -592,7 +586,7 @@ def function_call_generate(
             if response:
                 logger.error(str(e))
                 logger.debug(Helper.get_pretty_dict_json_no_sort(response))
-                previous_responses.append(response)
+                previous_responses.append(response)  # type: ignore
 
             if i >= max_retries_json_response_parse - 1:
                 logger.exception(e)
@@ -654,11 +648,12 @@ def embeddings(prompt: str, embed_model: str = "nomic-embed-text:latest", num_ct
     else:
         options = {"num_ctx": num_ctx}
 
-    ret: Mapping[str, Sequence[float]] = OLLAMA_CLIENT.embeddings(model=embed_model, prompt=prompt, options=options)
+    # ret: Mapping[str, Sequence[float]] = OLLAMA_CLIENT.embeddings(model=embed_model, prompt=prompt, options=options)
+    ret: EmbeddingsResponse = OLLAMA_CLIENT.embeddings(model=embed_model, prompt=prompt, options=options)
 
     return ret["embedding"]
 
-def purge_model(model: str):
+def purge_model(model: str) -> None:
     OLLAMA_CLIENT.generate(model=model, keep_alive=0)  # unloading model from vram
 
 
@@ -667,7 +662,7 @@ def print_me(
     end: str | None = "\n",
     flush: bool = False,
     sep: str | None = " ",
-    file: "SupportsWrite[str] | None" = sys.stdout,
+    file: TextIO|None = sys.stdout,
 ) -> None:
     print(*values, flush=flush, end=end, sep=sep, file=file)
 
@@ -715,7 +710,7 @@ get_reformat_and_semantically_markup_prompt = partial(render_prompt_template, te
 
 
 
-def main():
+def main() -> None:
     # compare_embeds()
 
 
