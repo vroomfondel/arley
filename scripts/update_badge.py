@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 
 def install_and_import(packagename: str, pipname: str) -> None:
@@ -17,7 +17,7 @@ def install_and_import(packagename: str, pipname: str) -> None:
 
 install_and_import(packagename="github", pipname="pygithub")
 
-from github import Github, InputFileContent, Clones, Auth
+from github import Auth, Clones, Github, InputFileContent
 
 
 def main() -> None:

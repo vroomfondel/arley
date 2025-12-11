@@ -1,28 +1,23 @@
+import datetime
 import hashlib
-import re
-from io import StringIO
-from pathlib import Path
-from typing import Dict, Tuple, Optional
 import json
+import re
+import sys
 import traceback
-
-from datetime import datetime
-from datetime import date
-from datetime import timedelta
-
+import uuid
 # import functools
 # https://docs.python.org/3/library/functools.html
 from functools import wraps
-import sys
-
-import pytz
-# from redis import Redis #StrictRedis #since 3.0 StrictRedis IS Redis
-from redis import Redis, ConnectionPool
-from typing import Optional
+from io import StringIO
+from pathlib import Path
+from typing import (Any, Callable, ClassVar, Dict, List, Literal, Optional,
+                    Self, Tuple, TypeVar)
 from uuid import UUID
 
+import pytz
 import ruamel.yaml
-
+# from redis import Redis #StrictRedis #since 3.0 StrictRedis IS Redis
+from redis import ConnectionPool, Redis
 from reputils import MailReport
 
 try:
@@ -38,21 +33,22 @@ from loguru import logger
 # from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 # from redis.commands.search.query import NumericFilter, Query
 
+T = TypeVar("T")
+
 
 # https://stackoverflow.com/questions/6760685/what-is-the-best-way-of-implementing-singleton-in-python
 class Singleton(type):
     # logger = logger.bind(classname=__qualname__)
-    _instances = {}
+    _instances: ClassVar[Dict[type, Any]] = {}
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls: type[T], *args: Any, **kwargs: Any) -> T:
         # cls.logger.debug(f"{args=}")
         # cls.logger.debug(f"{kwargs=}")
 
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        # else:
-        #     cls._instances[cls].__init__(*args, **kwargs)
-        return cls._instances[cls]
+        if cls not in cls._instances:  # type: ignore
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)  # type: ignore
+
+        return cls._instances[cls]  # type: ignore
 
 
 redisconnectionpool: ConnectionPool = ConnectionPool(
@@ -76,7 +72,10 @@ def get_redis() -> Redis:
     #   )
 
 
-def get_exception_tb_as_string(exc: Exception) -> str:
+def get_exception_tb_as_string(exc: Exception | None) -> str | None:
+    if exc is None:
+        return None
+
     tb1: traceback.TracebackException = traceback.TracebackException.from_exception(exc)
     tbsG = tb1.format()
     tbs = ""
@@ -87,51 +86,47 @@ def get_exception_tb_as_string(exc: Exception) -> str:
     return tbs
 
 
-def eprint(*args, **kwargs):
+def eprint(*args: Any, **kwargs: Any) -> None:
     print(*args, file=sys.stderr, **kwargs)
 
 
 class ComplexEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj: Any) -> Any:
         if hasattr(obj, "repr_json"):
             return obj.repr_json()
         elif hasattr(obj, "as_string"):
             return obj.as_string()
-        elif type(obj) == UUID:
-            obj: UUID
+        elif isinstance(obj, uuid.UUID):
             return str(obj)
-        elif type(obj) == datetime:
-            obj: datetime
+        elif isinstance(obj, datetime.datetime):
             return obj.isoformat()  # strftime("%Y-%m-%d %H:%M:%S %Z")
-        elif type(obj) == date:
-            obj: date
+        elif isinstance(obj, datetime.date):
             return obj.strftime("%Y-%m-%d")
-        elif type(obj) == timedelta:
-            obj: timedelta
+        elif isinstance(obj, datetime.timedelta):
             return str(obj)
         elif isinstance(obj, dict) or isinstance(obj, list):
-            obj: get_pretty_dict_json_no_sort(obj)
-            return obj
+            robj: str = get_pretty_dict_json_no_sort(obj)
+            return robj
         else:
             return json.JSONEncoder.default(self, obj)
 
 
-def print_pretty_dict_json(data, indent: int = 4):
+def print_pretty_dict_json(data: Any, indent: int = 4) -> None:
     print(json.dumps(data, indent=indent, sort_keys=True, cls=ComplexEncoder, default=str))
 
 
-def get_pretty_dict_json(data, indent: int = 4) -> str:
+def get_pretty_dict_json(data: Any, indent: int = 4) -> str:
     return json.dumps(data, indent=indent, sort_keys=True, cls=ComplexEncoder, default=str)
 
 
-def get_pretty_dict_json_no_sort(data, indent: int = 4) -> str:
+def get_pretty_dict_json_no_sort(data: Any, indent: int = 4) -> str:
     return json.dumps(data, indent=indent, sort_keys=False, cls=ComplexEncoder, default=str)
 
 
 def set_redis_str(
     name: str, value: str, ex: Optional[int] = None, nx: bool = False, get: bool = False
 ) -> Optional[str | bool]:
-    ret: Optional[str | bool] = get_redis().set(name=name, value=value, ex=ex, nx=nx, get=get)  # type: ignore
+    ret: Optional[str | bool | Literal[""]] = get_redis().set(name=name, value=value, ex=ex, nx=nx, get=get)  # type: ignore
     return ret
 
 
@@ -140,11 +135,11 @@ def get_redis_str(name: str) -> Optional[str]:
     return ret
 
 
-def drop_redis_entry(name: str):
+def drop_redis_entry(name: str) -> None:
     get_redis().delete(name)
 
 
-def drop_redis_entries(*names: str):
+def drop_redis_entries(*names: str) -> None:
     for name in names:
         # print(f"NAME: {name}")
         get_redis().delete(name)
@@ -156,10 +151,11 @@ def set_redis_json(
     ex: Optional[int] = None,
     nx: bool = False,
     get: bool = False,
-) -> Optional[Dict | bool]:
+) -> Optional[Dict | bool | Literal[""]]:
     ret_1: Optional[str | bool] = set_redis_str(name=name, value=json.dumps(value, default=str), ex=ex, nx=nx, get=get)
     if ret_1 and isinstance(ret_1, str):
         return json.loads(ret_1)
+
     return ret_1
 
 
@@ -170,7 +166,7 @@ def get_redis_json(name: str) -> Optional[Dict]:
     return None
 
 
-def rediscached(func):
+def rediscached(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     Decorator that caches the results of the function call.
 
@@ -180,7 +176,7 @@ def rediscached(func):
     """
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         # Generate the cache key from the function's arguments.
         key_parts = [func.__name__] + list(args)
         key = "-".join(key_parts)
@@ -220,11 +216,12 @@ def rediscached(func):
 
 
 def get_md5_for_file(file: Path) -> str:
-    with open(file, 'rb') as f:
+    with open(file, "rb") as f:
         file_hash = hashlib.md5()
         while chunk := f.read(4_096):
             file_hash.update(chunk)
     return file_hash.hexdigest()
+
 
 def get_dict_as_yaml_str(data: dict) -> str:
     yaml = ruamel.yaml.YAML()
@@ -233,14 +230,16 @@ def get_dict_as_yaml_str(data: dict) -> str:
     yaml.dump(data, stream=strwriter)
     return strwriter.getvalue()
 
-def flatten(d: dict, parent_key='') -> dict:
-    items = []
+
+def flatten(d: dict, parent_key: str = "") -> dict:
+    items: List = []
     for k, v in d.items():
         try:
-            items.extend(flatten(v, '%s%s_' % (parent_key, k)).items())
+            items.extend(flatten(v, "%s%s_" % (parent_key, k)).items())
         except AttributeError:
-            items.append(('%s%s' % (parent_key, k), v))
+            items.append(("%s%s" % (parent_key, k), v))
     return dict(items)
+
 
 def flatten_lists(d: dict) -> dict:
     ret: dict = {}
@@ -258,12 +257,13 @@ def flatten_lists(d: dict) -> dict:
 
     return ret
 
-def detach_NOTE_line(txt: str) -> Tuple[str,str|None]:
+
+def detach_NOTE_line(txt: str) -> Tuple[str, str | None]:
     ret_note: Optional[str] = None
     ret: StringIO = StringIO()
     txt_reader: StringIO = StringIO(txt)
 
-    line: str|None
+    line: str | None
     while True:
         line = txt_reader.readline()
         if not line:
@@ -277,7 +277,9 @@ def detach_NOTE_line(txt: str) -> Tuple[str,str|None]:
     return ret.getvalue(), ret_note
 
 
-def maillog(subject: str, from_mail: str, text: str, mailrecipients_to: list[str], mailrecipients_cc: list[str]|None = None) -> str:
+def maillog(
+    subject: str, from_mail: str, text: str, mailrecipients_to: list[str], mailrecipients_cc: list[str] | None = None
+) -> str:
     _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 
     _sdfD_formatstring: str = "%d.%m.%Y"
@@ -294,32 +296,32 @@ def maillog(subject: str, from_mail: str, text: str, mailrecipients_to: list[str
         ignoresslerrors=True,
     )
 
-    now: datetime = datetime.now(_timezone)
+    now: datetime.datetime = datetime.datetime.now(_timezone)
     sdd: str = now.strftime(_sdfD_formatstring)
 
     sendmail: MailReport.MRSendmail = MailReport.MRSendmail(
         serverinfo=serverinfo,
         returnpath=MailReport.EmailAddress.fromSTR(from_mail),
         replyto=MailReport.EmailAddress.fromSTR(from_mail),
-        subject=subject
+        subject=subject,
     )
     sendmail.tos = [MailReport.EmailAddress.fromSTR(k) for k in [mailrecipients_to]]
 
     if mailrecipients_cc is not None:
         sendmail.ccs = [MailReport.EmailAddress.fromSTR(k) for k in mailrecipients_cc]
 
-    sent_mail: str = sendmail.send(
-        txt=text
-    )
+    sent_mail: str = sendmail.send(txt=text)
     return sent_mail
 
 
-_think_tag_pattern: re.Pattern[str] = re.compile(r"<think>\s*(.*?)\s*</think>\s*(.*)",  re.MULTILINE | re.DOTALL)
-def detach_think_tag(input_text: Optional[str]) -> Tuple[str, str|None]|None:
-    if not input_text:
-        return None
+_think_tag_pattern: re.Pattern[str] = re.compile(r"<think>\s*(.*?)\s*</think>\s*(.*)", re.MULTILINE | re.DOTALL)
 
-    matches: list[str | tuple[*str]] | None = _think_tag_pattern.findall(input_text)
+
+def detach_think_tag(input_text: Optional[str]) -> Tuple[str | None, str | None]:
+    if not input_text:
+        return None, None
+
+    matches: list[str | tuple[str, ...]] | None = _think_tag_pattern.findall(input_text)
     if matches:
         # logger.debug(f"#matches: {len(matches)}")
 
@@ -340,7 +342,3 @@ def detach_think_tag(input_text: Optional[str]) -> Tuple[str, str|None]|None:
 
     # no match
     return input_text, None
-
-
-
-

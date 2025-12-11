@@ -55,8 +55,8 @@ isort: venv
 
 tcheck: venv
 	@$(venv_activated)
-	mypy *.py arley/*py arley/dbobjects/*.py arley/emailinterface/*.py arley/langchain/*.py arley/llm/*.py arley/vectorstore/*.py dbaccess/*.py aux/*.py scripts/*.py
-    # mypy *.py **/*.py
+	mypy *.py scripts dbaccess aux arley
+
 
 build: venv
 	./build.sh

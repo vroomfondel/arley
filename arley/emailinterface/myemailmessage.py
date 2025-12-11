@@ -1,34 +1,31 @@
 # https://docs.python.org/3/library/email.examples.html
 import datetime
 import email
-from email import utils
-import re
-from typing import Any, Self, List
 import io
+import re
+from email import utils
+from email.header import decode_header
+from email.message import EmailMessage
+from typing import Any, List, Self
 from uuid import UUID
 
+import html_text
 import pytz
+from loguru import logger
+from lxml.html import HtmlElement
+from mailparser_reply import EmailMessage as ReplyEmailMessage
+from mailparser_reply import EmailReply, EmailReplyParser
 
 from arley import Helper
 from arley.config import settings
-
-from email.message import EmailMessage
-from email.header import decode_header
-
-from mailparser_reply import EmailReplyParser, EmailReply
-from mailparser_reply import EmailMessage as ReplyEmailMessage
-
-import html_text
-from lxml.html import HtmlElement
-
-from loguru import logger
 
 _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 
 MAIL_LANGUAGES: list[str] = ["en", "de"]
 LOGME_VERBOSE: bool = False
 
-class MyEmailMessage():
+
+class MyEmailMessage:
     logger = logger.bind(classname=__qualname__)
 
     # headers with relevance:
@@ -37,10 +34,20 @@ class MyEmailMessage():
     #     Return-path
     #     Reply-To
 
-    email_pattern: re.Pattern[str] = re.compile(r'[\w.+-]+@[\w-]+\.[\w.-]+')
-    arley_id_pattern: re.Pattern[str] = re.compile(r"\[(arley-id)(\s*)([0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12})\]")
+    email_pattern: re.Pattern[str] = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+    arley_id_pattern: re.Pattern[str] = re.compile(
+        r"\[(arley-id)(\s*)([0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12})\]"
+    )
 
-    def __init__(self, msgid: int, email_message: EmailMessage, envelope_message_id: str, from_email: str, to_email: str, subject: str):
+    def __init__(
+        self,
+        msgid: int,
+        email_message: EmailMessage,
+        envelope_message_id: str,
+        from_email: str,
+        to_email: str,
+        subject: str,
+    ):
         self.msgid: int = msgid
         self.email_message: EmailMessage = email_message
         self.parsed_email: ReplyEmailMessage | None = None
@@ -52,7 +59,7 @@ class MyEmailMessage():
 
         self._sanitize_header_fields()
 
-    def _sanitize_header_fields(self):
+    def _sanitize_header_fields(self) -> None:
         if self.envelope_message_id:
             self.envelope_message_id = self.envelope_message_id.replace("\n", "").replace("\r", "")
 
@@ -67,7 +74,7 @@ class MyEmailMessage():
 
     @classmethod
     def get_date_from_header(cls, email_message: EmailMessage, dateheader_name: str) -> datetime.datetime | None:
-        dhs: list = email_message.get_all(dateheader_name)
+        dhs: list | None = email_message.get_all(dateheader_name)
         if not dhs:
             return None
 
@@ -75,7 +82,7 @@ class MyEmailMessage():
             rec: str = dhs[0]
             rec_date_str: str = rec
             if rec.find("; ") > 0:
-                rec_date_str = rec[rec.rfind(";") + 1:].strip()
+                rec_date_str = rec[rec.rfind(";") + 1 :].strip()
 
             rec_date_datetime: datetime.datetime = email.utils.parsedate_to_datetime(rec_date_str)
             rec_date_datetime = rec_date_datetime.astimezone(_timezone)
@@ -99,7 +106,9 @@ class MyEmailMessage():
         ret["from_email"] = self.from_email
         ret["to_email"] = self.to_email
         ret["subject"] = self.subject
-        ret["email_message"] = self.email_message  # bytes(self.email_message.as_string(), "utf-8").decode("unicode_escape")
+        ret["email_message"] = (
+            self.email_message
+        )  # bytes(self.email_message.as_string(), "utf-8").decode("unicode_escape")
         # self.logger.debug(ret["email_message"])
         ret["parsed_email"] = self.parsed_email
         ret["original_textbody"] = self.get_textbody()
@@ -136,7 +145,9 @@ class MyEmailMessage():
         return buffer.getvalue()
 
     @classmethod
-    def get_textbody_from_email_message_and_update_my_email_message(cls, email_message: EmailMessage, my_email_message: Self | None) -> str | None:
+    def get_textbody_from_email_message_and_update_my_email_message(
+        cls, email_message: EmailMessage, my_email_message: Self | None
+    ) -> str | None:
         if LOGME_VERBOSE:
             cls.logger.debug(f"{email_message.get_content_type()=}")
             cls.logger.debug(f"{email_message.get_content_maintype()=}")
@@ -177,12 +188,22 @@ class MyEmailMessage():
 
                 # part.get_payload()
                 if part.get_content_type().find("text/plain") >= 0:
-                    textbody = part.get_payload(decode=True).decode(part.get_content_charset()).strip()
+                    mep: EmailMessage | bytes | Any = part.get_payload(decode=True)
+                    csm: str | None = part.get_content_charset()
+                    if hasattr(mep, "decode"):
+                        textbody = mep.decode(csm if csm else "utf-8").strip()
                 elif textbody is None and part.get_content_type().find("text/html") >= 0:
-                    htmltext: str = part.get_payload(decode=True).decode(part.get_content_charset())
+                    # htmltext: str = part.get_payload(decode=True).decode(part.get_content_charset())
+                    hmep: EmailMessage | bytes | Any = part.get_payload(decode=True)
+                    hcsm: str | None = part.get_content_charset()
+                    htmltext: str | None = None
+                    if hasattr(hmep, "decode"):
+                        htmltext = hmep.decode(hcsm if hcsm else "utf-8").strip()
+
                     if LOGME_VERBOSE:
                         cls.logger.debug(f"HTMLTEXT:\n{htmltext}\n\n\n")
 
+                    assert htmltext is not None
                     htmltree: HtmlElement = html_text.parse_html(htmltext)
                     cleaned_tree: HtmlElement = html_text.cleaner.clean_html(htmltree)
                     decodedhtml: str = html_text.etree_to_text(cleaned_tree)
@@ -192,25 +213,26 @@ class MyEmailMessage():
 
                     textbody = decodedhtml.strip()
         else:
-            textbody = email_message.get_payload(decode=True).decode(email_message.get_content_charset()).strip()
+            # textbody = email_message.get_payload(decode=True).decode(email_message.get_content_charset()).strip()
+            tmep: EmailMessage | bytes | Any = email_message.get_payload(decode=True)
+            tcsm: str | None = email_message.get_content_charset()
+            if hasattr(tmep, "decode"):
+                textbody = tmep.decode(tcsm if tcsm else "utf-8").strip()
 
         if my_email_message:
             my_email_message.textbody_full = textbody
             my_email_message.parsed_email = EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody)
 
-        if LOGME_VERBOSE:
+        if LOGME_VERBOSE and my_email_message is not None:
             cls.logger.debug(f"TEXTBODY:\n{textbody}\n\n")
             cls.logger.debug(f"PARSED_TEXTBODY:\n{my_email_message.parsed_email}")
             cls.logger.debug(EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody).text)
 
         return textbody
 
-    def ensure_parsed(self):
+    def ensure_parsed(self) -> None:
         if not self.parsed_email:
-            MyEmailMessage.get_textbody_from_email_message_and_update_my_email_message(
-                self.email_message,
-                self
-            )
+            MyEmailMessage.get_textbody_from_email_message_and_update_my_email_message(self.email_message, self)
 
     def get_in_reply_to(self) -> str | None:
         return MyEmailMessage.decode_my_header(self.email_message.get("In-Reply-To"))
@@ -228,16 +250,19 @@ class MyEmailMessage():
         return arleyid_from_subject
 
     @classmethod
-    def get_arley_id(cls, search_in_text: str) -> UUID | None:
+    def get_arley_id(cls, search_in_text: str | None) -> UUID | None:
         # ***********************************************************************************
         # please keep this in your reply and do not make changes below the line before this
         # [arley-id {{ ARLEYID }}]
         # ***********************************************************************************
         # two groups enclosed in separate ( and ) bracket
 
+        if search_in_text is None:
+            return None
+
         arley_ids: set[UUID] = set()
 
-        matches: list[str | tuple[*str]] | None = cls.arley_id_pattern.findall(search_in_text)
+        matches: list[str | tuple[str, ...]] | None = cls.arley_id_pattern.findall(search_in_text)
         if matches:
             for match in matches:
                 # Extract matching values of all groups
@@ -264,6 +289,7 @@ class MyEmailMessage():
     def get_all_replies(self) -> list[EmailReply]:
         self.ensure_parsed()
 
+        assert self.parsed_email is not None
         replies: list[EmailReply] = self.parsed_email.replies
 
         # for i in replies:
@@ -273,7 +299,7 @@ class MyEmailMessage():
 
         return replies
 
-    def print_info(self):
+    def print_info(self) -> None:
         pinfo: dict = {}
         for k, v in self.email_message.items():
             # self.logger.debug(f"{k=}\t{v=}")
@@ -289,6 +315,8 @@ class MyEmailMessage():
     def get_latest_reply(self) -> str | None:
         self.ensure_parsed()
 
+        assert self.parsed_email is not None
+
         if not self.parsed_email.replies:
             return None
 
@@ -299,7 +327,7 @@ class MyEmailMessage():
                 "reply_body": latest_reply,
                 "reply_full_body": self.parsed_email.replies[0].full_body,
                 "reply_headers": self.parsed_email.replies[0].headers,
-                "reply_disclaimers": self.parsed_email.replies[0].disclaimers
+                "reply_disclaimers": self.parsed_email.replies[0].disclaimers,
             }
             self.logger.debug(Helper.get_pretty_dict_json_no_sort(dm))
 
@@ -360,7 +388,8 @@ class MyEmailMessage():
     # for fn in partfiles.values():
     #     os.remove(fn)
 
-def do_myemail_test():
+
+def do_myemail_test() -> None:
     from arley.emailinterface.imapadapter import IMAPAdapter
 
     ima: IMAPAdapter = IMAPAdapter()
@@ -368,16 +397,24 @@ def do_myemail_test():
 
     try:
         from imapclient.response_types import Envelope
+
         mails: list[tuple[int, Envelope]] = ima.list_mails(settings.emailsettings.folders.cur)
         for msgid, env in mails:
             logger.debug(f"{msgid=} {env=}")
             env_messageid: str = env.message_id.decode().strip()
 
-            my_email_message: MyEmailMessage = ima.get_message(msgid=msgid, folder=settings.emailsettings.folders.cur)
+            my_email_message: MyEmailMessage | None = ima.get_message(
+                msgid=msgid, folder=settings.emailsettings.folders.cur
+            )
+            if my_email_message is None:
+                continue
+
             email_message: EmailMessage = my_email_message.email_message
             # EmailReplyParser(languages=MAIL_LANGUAGES).read(text=textbody)
             # my_email_message.ensure_parsed()
-            textbody: str = my_email_message.get_textbody_from_email_message_and_update_my_email_message(email_message=email_message, my_email_message=my_email_message)
+            textbody: str | None = my_email_message.get_textbody_from_email_message_and_update_my_email_message(
+                email_message=email_message, my_email_message=my_email_message
+            )
             logger.debug(textbody)
 
     except Exception as ex:
@@ -439,6 +476,7 @@ def do_myemail_test():
     #         return textbody
 
     #
+
 
 if __name__ == "__main__":
     do_myemail_test()

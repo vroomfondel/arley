@@ -1,25 +1,23 @@
-import sys
 import datetime
+import os
+import sys
 import traceback
 import uuid
 from contextlib import contextmanager
 from pprint import pprint
-from typing import List, Optional, Any, Self, Callable
+from typing import Any, Callable, Dict, Generator, List, Optional, Self
 
 import loguru
 import sqlalchemy
-from sqlalchemy import create_engine, event, text, exc, Engine, URL, Connection
+from loguru import logger
+from sqlalchemy import (URL, Column, Connection, Engine, ForeignKey, Integer,
+                        MetaData, String, Table, create_engine, event, exc,
+                        inspect, text)
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.pool import NullPool, QueuePool
 from sqlalchemy.sql import text
-import os
-
 # https://chartio.com/resources/tutorials/how-to-execute-raw-sql-in-sqlalchemy/
 from sqlalchemy.sql.elements import TextClause
-from sqlalchemy.dialects import postgresql
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey
-from sqlalchemy import inspect
-
-from loguru import logger
 
 import arley.config
 from arley.Helper import Singleton
@@ -30,8 +28,9 @@ LOGME_VERBOSE: bool = False
 class DBConnectionEngine(metaclass=Singleton):
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self):
-        super(DBConnectionEngine, self).__init__()
+    def __init__(self) -> None:
+        super().__init__()
+
         self.psqlengine: Engine | None = None
         self._init_connection(self._get_connection_url_from_env())
 
@@ -60,7 +59,7 @@ class DBConnectionEngine(metaclass=Singleton):
 
         return dburl
 
-    def _init_connection(self, dburl: URL):
+    def _init_connection(self, dburl: URL) -> None:
         self.logger.debug(f"{dburl=}")
 
         self.psqlengine = create_engine(
@@ -73,11 +72,11 @@ class DBConnectionEngine(metaclass=Singleton):
             # max_overflow=0
             echo=True,
             # isolation_level="AUTOCOMMIT",
-            query_cache_size=0
+            query_cache_size=0,
         )
 
     @contextmanager
-    def connect(self):
+    def connect(self) -> Generator[Connection, Any, None]:
         connection: Connection = self.get_engine(autocommit=True).connect()
         # connection = connection.execution_options()
         try:
@@ -87,7 +86,7 @@ class DBConnectionEngine(metaclass=Singleton):
             connection.close()
 
     @classmethod
-    def get_instance(cls) -> Self:
+    def get_instance(cls) -> "DBConnectionEngine":
         return DBConnectionEngine()  # is singleton
 
     def get_engine(self, autocommit: bool = True) -> Engine:
@@ -95,6 +94,7 @@ class DBConnectionEngine(metaclass=Singleton):
         if not autocommit:
             isolation_level = "SERIALIZABLE"
 
+        assert self.psqlengine
         return self.psqlengine.execution_options(isolation_level=isolation_level)
 
 
@@ -129,7 +129,10 @@ def get_exception_tb_as_string(exc: Exception) -> str:
     return tbs
 
 
-def eprint(lm: loguru.logger, *args, **kwargs):
+import loguru
+
+
+def eprint(lm: loguru._logger.Logger, *args: Any, **kwargs: Any) -> None:  # type: ignore
     if not lm:
         print(*args, file=sys.stderr, **kwargs)
     else:
@@ -139,12 +142,12 @@ def eprint(lm: loguru.logger, *args, **kwargs):
 class DBObjectInsertUpdateDeleteResult:
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.rowcount: Optional[int] = None
-        self.exception: Exception = None
-        super(DBObjectInsertUpdateDeleteResult, self).__init__()
+        self.exception: Exception | None = None
+        super().__init__()
 
-    def from_result_set(self, rs: sqlalchemy.engine.cursor.CursorResult, ex: Exception = None) -> Optional[Self]:
+    def from_result_set(self, rs: sqlalchemy.engine.cursor.CursorResult, ex: Exception | None = None) -> Optional[Self]:
         if ex is not None:
             eprint(DBObjectInsertUpdateDeleteResult.logger, "Exception caught: ", ex)
             self.exception = ex
@@ -158,7 +161,7 @@ class DBObjectInsertUpdateDeleteResult:
     def exception_occured(self) -> bool:
         return self.exception is not None
 
-    def get_exception(self) -> Exception:
+    def get_exception(self) -> Exception | None:
         return self.exception
 
     def get_rows_affected(self) -> Optional[int]:
@@ -179,7 +182,7 @@ class MultiLineResSet:
     def get_row_count(self) -> int:
         return len(self.data)
 
-    def add_line(self, row: List[Any]):
+    def add_line(self, row: List[Any]) -> None:
         assert len(self.colnames) == len(row)
 
         self.data.append(row)
@@ -226,7 +229,7 @@ class MultiLineResSet:
             ret[self.colnames[i]] = row[i]
         return ret
 
-    def get_lookup_dict(self, keycolumnname: str):
+    def get_lookup_dict(self, keycolumnname: str) -> Dict:
         """
         kinda assumes, that keycolumname is UNIQUE
         """
@@ -239,7 +242,7 @@ class MultiLineResSet:
 
         return _ret
 
-    def get_row_lookup_dict(self, keycolumnname: str):
+    def get_row_lookup_dict(self, keycolumnname: str) -> Dict:
         """
         kinda assumes, that keycolumname is UNIQUE
         """
@@ -252,7 +255,7 @@ class MultiLineResSet:
 
         return _ret
 
-    def get_rows_lookup_dict(self, keycolumnname: str):
+    def get_rows_lookup_dict(self, keycolumnname: str) -> Dict:
         _ret: dict = {}
 
         for j in range(0, self.get_row_count()):
@@ -262,7 +265,7 @@ class MultiLineResSet:
 
         return _ret
 
-    def find_rows(self, params: {}):
+    def find_rows(self, params: Dict) -> List:
         ret: list = []
         for j in range(0, self.get_row_count()):
             for columnname in params:
@@ -278,38 +281,19 @@ class MultiLineResSet:
         return ret
 
 
-def get_compiled_sql(sql: str, **bindparams) -> str:
-    sql_stmt: TextClause = text(sql)
-    sql_stmt = sql_stmt.bindparams(**bindparams)
+def get_compiled_sql(sql: str, **bindparams: Any) -> str:
+    """Compile a SQL text with ":variable" placeholders into a literal SQL string
+    using the PostgreSQL dialect.
 
-    dialect = postgresql.dialect()
+    Example:
+        get_compiled_sql("select :x::int as v", x=5) -> "SELECT 5::INTEGER AS v"
+    """
 
+    # check also:
     # https://stackoverflow.com/questions/5631078/sqlalchemy-print-the-actual-query
-    class LiteralCompiler(dialect.statement_compiler):
-        def visit_bindparam(self, bindparam, within_columns_clause=False, literal_binds=False, **kwargs):
-            return self.render_literal_value(bindparam.value, bindparam.type)
+    # https://stackoverflow.com/questions/5631078/sqlalchemy-print-the-actual-query/5698357#5698357
 
-        def render_array_value(self, val, item_type):
-            if isinstance(val, list):
-                return "{%s}" % ",".join([self.render_array_value(x, item_type) for x in val])
-            return self.render_literal_value(val, item_type)
-
-        def render_literal_value(self, value, type_):
-            if isinstance(value, uuid.UUID):
-                return "'" + str(value) + "'"
-            elif isinstance(value, datetime.datetime):
-                return "'" + str(value) + "'"
-            elif isinstance(value, datetime.date):
-                return "'" + str(value) + "'"
-            elif value is None:
-                return "null"
-            # elif isinstance(value, (basestring, date, datetime, timedelta)):
-            #     return "'%s'" % str(value).replace("'", "''")
-            # elif isinstance(value, list):
-            #     return "'{%s}'" % (",".join([self.render_array_value(x, type_.item_type) for x in value]))
-            return super(LiteralCompiler, self).render_literal_value(value, type_)
-
-    return LiteralCompiler(dialect).process(sql_stmt)
+    # return LiteralCompiler(dialect=dialect).process(sql_stmt)
 
     # sql_stmt = sql_stmt.bindparams(**bindparams)
     # sql_filled = text(sql).bindparams(**bindparams)
@@ -317,15 +301,26 @@ def get_compiled_sql(sql: str, **bindparams) -> str:
     # return sql_stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     # print("Compiled-SQL-with-args: ", sql_filled.compile(dialect=conn.dialect, compile_kwargs={"literal_binds": True}))
 
+    # Build a TextClause with bound parameters
+    sql_stmt: TextClause = text(sql).bindparams(**bindparams)
 
-def exec_one_line(sqlstr: str, **kwargs) -> Optional[dict]:
+    # Compile with the PostgreSQL dialect and render literal values in-place
+    compiled = sql_stmt.compile(
+        dialect=postgresql.dialect(),
+        compile_kwargs={"literal_binds": True},
+    )
+
+    return str(compiled)
+
+
+def exec_one_line(sqlstr: str, **kwargs: Any) -> Optional[dict]:
     sql: TextClause = text(sqlstr)
     conn: Connection
     with DBConnectionEngine.get_instance().connect() as conn:
         rs: sqlalchemy.engine.cursor.Result = conn.execute(sql, **kwargs)
         keys: sqlalchemy.engine.result.RMKeyView = rs.keys()
         colnames: list = list(keys)
-        ret: dict = None
+        ret: dict | None = None
 
         while True:
             row = rs.fetchone()
@@ -345,13 +340,13 @@ def exec_one_line(sqlstr: str, **kwargs) -> Optional[dict]:
     return ret
 
 
-def exec_multi_line(sqlstr: str, **kwargs) -> Optional[MultiLineResSet]:
+def exec_multi_line(sqlstr: str, **kwargs: Any) -> Optional[MultiLineResSet]:
     sql = text(sqlstr)
     with DBConnectionEngine.get_instance().connect() as conn:
         rs: sqlalchemy.engine.cursor.Result = conn.execute(sql, **kwargs)
         keys: sqlalchemy.engine.result.RMKeyView = rs.keys()
         colnames: list = list(keys)
-        ret: MultiLineResSet = None
+        ret: MultiLineResSet | None = None
 
         while True:
             if ret is None:
@@ -373,13 +368,13 @@ def exec_multi_line(sqlstr: str, **kwargs) -> Optional[MultiLineResSet]:
     return ret
 
 
-def insertupdatedelete(sqlstr: str, **kwargs) -> Optional[DBObjectInsertUpdateDeleteResult]:
+def insertupdatedelete(sqlstr: str, **kwargs: Any) -> Optional[DBObjectInsertUpdateDeleteResult]:
     # https://chartio.com/resources/tutorials/how-to-execute-raw-sql-in-sqlalchemy/
     # https://stackoverflow.com/questions/36524293/inserting-into-postgres-database-from-sqlalchemy
 
     conn: sqlalchemy.engine.base.Connection
-    rs: sqlalchemy.engine.cursor.LegacyCursorResult = None
-    ex: Exception = None
+    rs: sqlalchemy.engine.cursor.CursorResult | None = None
+    ex: Exception | None = None
     with DBConnectionEngine.get_instance().connect() as conn:
         try:
             sql = text(sqlstr)
@@ -390,14 +385,16 @@ def insertupdatedelete(sqlstr: str, **kwargs) -> Optional[DBObjectInsertUpdateDe
         except Exception as exX:
             ex = exX
 
-        ret: DBObjectInsertUpdateDeleteResult = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
+        assert rs
+        ret: DBObjectInsertUpdateDeleteResult | None = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
 
         return ret
 
 
-def test_connect():
-    pprint(exec_one_line("select 1=1"))
+def connect_test() -> None:
+    logger.info(exec_one_line("select 1=1"))
 
 
 if __name__ == "__main__":
-    test_connect()
+    print(get_compiled_sql("select :x as v", x=5))
+    connect_test()

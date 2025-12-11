@@ -1,10 +1,9 @@
 import openparse
-from openparse import Node
-from openparse import processing
+from openparse import Node, processing
+
 # import numpy as np
 
 # https://github.com/Filimoa/open-parse/issues/30#issuecomment-2073595236
-
 
 
 # https://github.com/miku/open-parse/blob/miku/ollama-embeddings/src/openparse/processing/semantic_transforms.py

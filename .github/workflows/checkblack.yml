@@ -3,7 +3,7 @@ name: black-lint
 on:
   push:
     branches:
-      - "main"
+      - "OFFmain"
 
   pull_request:
 
