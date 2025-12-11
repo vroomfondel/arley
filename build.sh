@@ -25,7 +25,7 @@ fi
 
 export BUILDER_NAME=mbuilder
 # --progress=plain --no-cache
-export BUILDKIT_PROGRESS=plain
+# export BUILDKIT_PROGRESS=plain
 # export DOCKER_CLI_EXPERIMENTAL=enabled
 # apt -y install qemu-user-binfmt qemu-user binfmt-support
 
@@ -64,8 +64,10 @@ fi
 # takes some extra time...
 #docker "${docker_base_args[@]}" . > docker_build_local.log 2>&1 &
 
-# docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --push .
-docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 .
+docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --push .
+
+# export BUILDKIT_PROGRESS=plain
+# docker buildx "${docker_base_args[@]}" --platform linux/aarch64 .
 
 
 wait
