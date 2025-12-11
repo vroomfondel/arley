@@ -69,6 +69,5 @@ docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --pu
 # export BUILDKIT_PROGRESS=plain
 # docker buildx "${docker_base_args[@]}" --platform linux/aarch64 .
 
-
-wait
+# wait
 date
