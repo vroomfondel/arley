@@ -1,66 +1,69 @@
 # nomic-embed-text:latest
-import argparse, sys
+import argparse
 import glob
+import re
+import sys
 from enum import StrEnum, auto
 from functools import partial
 from io import StringIO
+from pathlib import Path, PurePath
+from typing import (Any, AnyStr, Dict, Generator, Iterator, List, Literal,
+                    Mapping, Optional, Sequence, Tuple)
 
 import chromadb
-import ruamel.yaml
-from llama_index.core.schema import BaseNode, TextNode, MetadataMode
-from llama_index.readers.file import FlatReader
-from mammoth.results import Result
-
-from chromadb.api.models.Collection import Collection as ChromaCollection
-
-from arley import Helper
-# import yaml
-
-from arley.config import (settings,
-                          is_in_cluster,
-                          OllamaPrimingMessage,
-                          TemplateType,
-                          OLLAMA_HOST,
-                          get_ollama_options,
-                          OLLAMA_GUESS_LANGUAGE_MODEL,
-                          OLLAMA_EMBED_MODEL,
-                          OLLAMA_MODEL,
-                          CHROMADB_DEFAULT_COLLECTION_NAME)
-
-from loguru import logger
-
-from pathlib import Path, PurePath
-from typing import Tuple, AnyStr, Literal, Dict, Any, Sequence, Optional, Generator, List, Mapping, Iterator
-
+import llama_index
+import openparse
 import openpyxl
+import openpyxl.utils.cell
+import ruamel.yaml
+from chromadb.api.models.Collection import Collection as ChromaCollection
+from llama_index.core.node_parser import (
+    LanguageConfig, MarkdownNodeParser,
+    SemanticDoubleMergingSplitterNodeParser, SemanticSplitterNodeParser,
+    SentenceSplitter)
+from llama_index.core.schema import BaseNode, MetadataMode, TextNode
+from llama_index.embeddings.ollama import OllamaEmbedding
+from llama_index.readers.file import FlatReader
+from llama_index.readers.file.markdown import MarkdownReader
+from loguru import logger
+from mammoth.results import Result
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
-import openpyxl.utils.cell
 
-import re
-
-import openparse
-
+from arley import Helper
+from arley.config import (CHROMADB_DEFAULT_COLLECTION_NAME, OLLAMA_EMBED_MODEL,
+                          OLLAMA_GUESS_LANGUAGE_MODEL, OLLAMA_HOST,
+                          OLLAMA_MODEL, OllamaPrimingMessage, TemplateType,
+                          get_ollama_options, is_in_cluster, settings)
 from arley.dbobjects.ragdoc import ArleyDocumentInformation, DocTypeEnum
-
-import llama_index
-from llama_index.readers.file.markdown import MarkdownReader
-from llama_index.core.node_parser import MarkdownNodeParser, LanguageConfig, SemanticDoubleMergingSplitterNodeParser
-from llama_index.core.node_parser import SemanticSplitterNodeParser
-from llama_index.embeddings.ollama import OllamaEmbedding
-from llama_index.core.node_parser import SentenceSplitter
-
 from arley.llm import ollama_adapter
 from arley.llm.language_guesser import LanguageGuesser
-from arley.llm.ollama_adapter import Message, ask_ollama_chat, get_create_summary_prompt, \
-    get_create_outline_prompt, get_reformat_and_semantically_markup_prompt
+from arley.llm.ollama_adapter import (
+    Message, ask_ollama_chat, get_create_outline_prompt,
+    get_create_summary_prompt, get_reformat_and_semantically_markup_prompt)
 from arley.vectorstore.chroma_adapter import ChromaDBConnection
 
-_OLLAMA_DEFAULT_MODEL: str = OLLAMA_MODEL  # "nous-hermes2-mixtral:8x7b"  # "hermes3:8b-llama3.1-fp16"  # "hermes3:70b-llama3.1-q4_0"  # "nous-hermes2-mixtral:8x7b"
-_OLLAMA_DEFAULT_EMBED_MODEL: str = OLLAMA_EMBED_MODEL  # "nomic-embed-text:latest"  #"mxbai-embed-large:latest"  # "nomic-embed-text:latest"
+# import yaml
+
+
+
+
+
+
+
+
+
+
+_OLLAMA_DEFAULT_MODEL: str = (
+    OLLAMA_MODEL  # "nous-hermes2-mixtral:8x7b"  # "hermes3:8b-llama3.1-fp16"  # "hermes3:70b-llama3.1-q4_0"  # "nous-hermes2-mixtral:8x7b"
+)
+_OLLAMA_DEFAULT_EMBED_MODEL: str = (
+    OLLAMA_EMBED_MODEL  # "nomic-embed-text:latest"  #"mxbai-embed-large:latest"  # "nomic-embed-text:latest"
+)
 _CHROMADB_DEFAULT_COLLECTION_NAME: str = CHROMADB_DEFAULT_COLLECTION_NAME
 
 # import numpy as np
+
 
 def docx_to_html(file: Path) -> Path | None:
     # https://github.com/mwilliamson/python-mammoth
@@ -68,10 +71,10 @@ def docx_to_html(file: Path) -> Path | None:
 
     with open(file, "rb") as docx_file:
         result: Result = mammoth.convert_to_html(docx_file)
-        html = result.value # The generated HTML
-        messages = result.messages # Any messages, such as warnings during conversion
+        html = result.value  # The generated HTML
+        messages = result.messages  # Any messages, such as warnings during conversion
 
-        outf = Path(file.parent.resolve(), file.name[:file.name.find(".doc")] + ".html")
+        outf = Path(file.parent.resolve(), file.name[: file.name.find(".doc")] + ".html")
 
         # with open(outf, 'w') as html_file:
         outf.write_text(html)
@@ -86,7 +89,7 @@ def docx_to_html(file: Path) -> Path | None:
         return outf
 
 
-def html_to_markdown(file: Path, tags_to_strip: None|list[str] = None) -> Path | None:
+def html_to_markdown(file: Path, tags_to_strip: None | list[str] = None) -> Path | None:
     from markdownify import markdownify as md
 
     # md('<b>Yay</b> <a href="http://github.com">GitHub</a>', convert=['b'])  # > '**Yay** GitHub'
@@ -95,7 +98,7 @@ def html_to_markdown(file: Path, tags_to_strip: None|list[str] = None) -> Path |
 
     markdowned: str = md(html_snippet, strip=tags_to_strip)
 
-    outf = Path(file.parent.resolve(), file.name[:file.name.rfind(MyFileTypes.html.value)] + MyFileTypes.md.value)
+    outf = Path(file.parent.resolve(), file.name[: file.name.rfind(MyFileTypes.html.value)] + MyFileTypes.md.value)
     # with open(outf, 'w') as html_file:
     outf.write_text(markdowned)
     logger.debug(f"written to: {outf.absolute()}")
@@ -104,7 +107,7 @@ def html_to_markdown(file: Path, tags_to_strip: None|list[str] = None) -> Path |
 
 
 def xlsx_to_yaml_raw(file: Path) -> Path | None:
-    outf: Path = Path(file.parent.resolve(), file.name[0:file.name.rfind(".")] + "_raw." + MyFileTypes.yaml.value)
+    outf: Path = Path(file.parent.resolve(), file.name[0 : file.name.rfind(".")] + "_raw." + MyFileTypes.yaml.value)
     if outf.exists():
         logger.debug(f"EXISTS: {outf.resolve()}")
         return outf
@@ -113,7 +116,7 @@ def xlsx_to_yaml_raw(file: Path) -> Path | None:
     colname_to_idx: Dict[str, int] = {}
     idx_to_colname: Dict[int, str] = {}
 
-    xlsx_data: Dict[str, List[str|int] | None] = {}
+    xlsx_data: Dict[str, List[str | int] | None] = {}
 
     # OR read with pandas: https://pythonbasics.org/read-excel/
 
@@ -132,7 +135,7 @@ def xlsx_to_yaml_raw(file: Path) -> Path | None:
         # sheetname='NDA_1' type(sheet)=<class 'openpyxl.worksheet.worksheet.Worksheet'> sheet=<Worksheet "NDA_1">
         logger.debug(f"{sheet.max_column=} {sheet.max_row=}")
 
-        for rowidx, row in enumerate(sheet.iter_rows()):  #min_row=1, max_col=3, max_row=2):
+        for rowidx, row in enumerate(sheet.iter_rows()):  # min_row=1, max_col=3, max_row=2):
             logger.debug(f"{rowidx=} {type(row)=} {row=}")
 
             for cellidx, cell in enumerate(row):
@@ -151,14 +154,13 @@ def xlsx_to_yaml_raw(file: Path) -> Path | None:
                 if cell.value:
                     value: Any = cell.value
                     if idx_to_colname[cellidx] == "Relevanz":
-                        value = value*100
+                        value = value * 100
                     elif isinstance(value, str):
                         value = value.strip()
 
                     xlsx_data[idx_to_colname[cellidx]].append(value)  # type: ignore
 
-
-    for key in xlsx_data:  #.keys():
+    for key in xlsx_data:  # .keys():
         values: Any = xlsx_data[key]
         if isinstance(values, list):
             if len(values) == 1:
@@ -169,7 +171,7 @@ def xlsx_to_yaml_raw(file: Path) -> Path | None:
     yaml = ruamel.yaml.YAML()
     yaml.indent(sequence=4, offset=2)
 
-    with open(outf, 'w') as outfile:
+    with open(outf, "w") as outfile:
         # yaml.dump(xlsx_data, outfile, indent=4, allow_unicode=True, sort_keys=False, default_flow_style=False)
         yaml.dump(xlsx_data, outfile)
         # yaml.dump(xlsx_data, sys.stdout)
@@ -179,64 +181,65 @@ def xlsx_to_yaml_raw(file: Path) -> Path | None:
 
 
 def docx_to_html_via_subprocess(file: Path) -> Tuple[int, Path] | None:
-    outf: Path = Path(file.parent.resolve(), file.name[:file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.html.value)
+    outf: Path = Path(
+        file.parent.resolve(), file.name[: file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.html.value
+    )
     cwd: str = str(file.parent.resolve().absolute())
-    cmd_array: list[str] = [
-            '/usr/bin/libreoffice',
-            '--invisible',
-            '--convert-to',
-            'html',
-            str(file.absolute())
-        ]
+    cmd_array: list[str] = ["/usr/bin/libreoffice", "--invisible", "--convert-to", "html", str(file.absolute())]
 
     ret: int = exec_sub_process(cwd=cwd, cmd_array=cmd_array)
 
     return ret, outf
 
+
 def docx_to_md_via_subprocess(file: Path) -> Tuple[int, Path] | None:
-    outf_md = Path(file.parent.resolve(), file.name[:file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.md.value)
+    outf_md = Path(file.parent.resolve(), file.name[: file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.md.value)
     cwd: str = str(file.parent.resolve().absolute())
 
     # markdown_mmd markdown markdown_strict gfm commonmark
     cmd_array: list[str] = [
         "/usr/bin/pandoc",
-        '-f', 'docx',
-        '-t', 'commonmark',
-        '-o', str(outf_md.absolute()),
-        str(file.absolute())
+        "-f",
+        "docx",
+        "-t",
+        "commonmark",
+        "-o",
+        str(outf_md.absolute()),
+        str(file.absolute()),
     ]
 
     ret: int = exec_sub_process(cwd=cwd, cmd_array=cmd_array)
 
     return ret, outf_md
 
+
 def docx_to_txt_via_subprocess(file: Path) -> Tuple[int, Path] | None:
-    outf_txt = Path(file.parent.resolve(), file.name[:file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.txt.value)
+    outf_txt = Path(file.parent.resolve(), file.name[: file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.txt.value)
     cwd: str = str(file.parent.resolve().absolute())
 
     # markdown_mmd markdown markdown_strict gfm commonmark
     cmd_array: list[str] = [
         "/usr/bin/pandoc",
-        '-f', 'docx',
-        '-t', 'plain',
-        '-o', str(outf_txt.absolute()),
-        str(file.absolute())
+        "-f",
+        "docx",
+        "-t",
+        "plain",
+        "-o",
+        str(outf_txt.absolute()),
+        str(file.absolute()),
     ]
 
     ret: int = exec_sub_process(cwd=cwd, cmd_array=cmd_array)
 
     return ret, outf_txt
 
+
 def docx_to_pdf_via_subprocess(file: Path) -> Tuple[int, Path] | None:
-    outf: Path = Path(file.parent.resolve(), file.name[:file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.pdf.value)
+    outf: Path = Path(
+        file.parent.resolve(), file.name[: file.name.rfind(MyFileTypes.docx.value)] + MyFileTypes.pdf.value
+    )
     cwd: str = str(file.parent.resolve().absolute())
-    cmd_array: list[str] = [
-            '/usr/bin/libreoffice',
-            '--invisible',
-            '--convert-to',
-            'pdf',
-            str(file.absolute())
-        ]
+    cmd_array: list[str] = ["/usr/bin/libreoffice", "--invisible", "--convert-to", "pdf", str(file.absolute())]
 
     ret: int = exec_sub_process(cwd=cwd, cmd_array=cmd_array)
 
@@ -244,35 +247,34 @@ def docx_to_pdf_via_subprocess(file: Path) -> Tuple[int, Path] | None:
 
 
 def html_to_md_via_subprocess(file: Path) -> Tuple[int, Path] | None:
-    outf_md = Path(file.parent.resolve(), file.name[:file.name.rfind(MyFileTypes.html.value)] + MyFileTypes.md.value)
+    outf_md = Path(file.parent.resolve(), file.name[: file.name.rfind(MyFileTypes.html.value)] + MyFileTypes.md.value)
     cwd: str = str(file.parent.resolve().absolute())
 
     cmd_array: list[str] = [
         "/usr/bin/pandoc",
-        '-f', 'html',
-        '-t', 'markdown_strict',
-        '-o', str(outf_md.absolute()),
-        str(file.absolute())
+        "-f",
+        "html",
+        "-t",
+        "markdown_strict",
+        "-o",
+        str(outf_md.absolute()),
+        str(file.absolute()),
     ]
 
     ret: int = exec_sub_process(cwd=cwd, cmd_array=cmd_array)
 
     return ret, outf_md
 
+
 def exec_sub_process(cwd: str, cmd_array: list[str]) -> int:
     # BASED ON: https://gist.githubusercontent.com/goerz/8897c2d8a602af2a45d4/raw/d7bf5a5d589389e99c796a555b640f8f4268d93e/doc2markdown.py
 
-    import sys
     import subprocess
+    import sys
 
-    ret: int = subprocess.call(cmd_array,
-        stderr=sys.stderr,
-        stdout=sys.stdout,
-        cwd=cwd
-    )
+    ret: int = subprocess.call(cmd_array, stderr=sys.stderr, stdout=sys.stdout, cwd=cwd)
 
     return ret
-
 
 
 # def cosine_similarity(
@@ -290,7 +292,6 @@ def exec_sub_process(cwd: str, cmd_array: list[str]) -> int:
 #
 #     similarities = [round(sim, 2) for sim in similarities]
 #     return [0] + similarities
-
 
 
 def parse_pdf(file: Path) -> int:
@@ -317,7 +318,10 @@ def parse_pdf(file: Path) -> int:
 
     return 0
 
-def llm_get_helpfull_atorney_system_prompt(lang: Literal["en", "de"] = "en", return_in_markdown: bool = True) -> str | None:
+
+def llm_get_helpfull_atorney_system_prompt(
+    lang: Literal["en", "de"] = "en", return_in_markdown: bool = True
+) -> str | None:
     priming_msg: OllamaPrimingMessage
     for priming_msg in settings.ollama.ollama_priming_messages:
         if priming_msg.lang != lang or priming_msg.role != "system":
@@ -335,28 +339,27 @@ def llm_get_helpfull_atorney_system_prompt(lang: Literal["en", "de"] = "en", ret
 
 
 def llm_remove_unnecessary_newlines_and_generate_semantic_markup_file(
-        txt_file: Path,
-        ollama_model: str = _OLLAMA_DEFAULT_MODEL,
-        temperature: float = 0.0,
-        template_type: TemplateType=TemplateType.xml) -> Path | None:
-    outf: Path = Path(txt_file.parent.resolve(),
-                      txt_file.name[:txt_file.name.rfind(".")] + "_llm." + MyFileTypes.md.value)
+    txt_file: Path,
+    ollama_model: str = _OLLAMA_DEFAULT_MODEL,
+    temperature: float = 0.0,
+    template_type: TemplateType = TemplateType.xml,
+) -> Path | None:
+    outf: Path = Path(
+        txt_file.parent.resolve(), txt_file.name[: txt_file.name.rfind(".")] + "_llm." + MyFileTypes.md.value
+    )
     outf.touch()
 
     _txt: str
-    with open(txt_file, 'r') as infile:
+    with open(txt_file, "r") as infile:
         _txt = infile.read()
 
     new_text = llm_remove_unnecessary_newlines_and_generate_semantic_markup(
-        plain_txt=_txt,
-        ollama_model=ollama_model,
-        template_type=template_type,
-        temperature=temperature
+        plain_txt=_txt, ollama_model=ollama_model, template_type=template_type, temperature=temperature
     )
 
     assert new_text is not None
 
-    with open(outf, 'w') as outfile:
+    with open(outf, "w") as outfile:
         outfile.write(new_text)
         outfile.flush()
 
@@ -366,18 +369,20 @@ def llm_remove_unnecessary_newlines_and_generate_semantic_markup_file(
 
 
 # "nous-hermes2-mixtral:8x7b"  # "llama3.1:70b-instruct-q3_K_M"  # "llama3.1:latest"  # "llama3.1:70b-instruct-q4_0"  #"nous-hermes2-mixtral:8x7b"  #"gemma2:27b"  #mixtral:latest"
-def llm_remove_unnecessary_newlines_and_generate_semantic_markup(plain_txt: str, ollama_model: str = _OLLAMA_DEFAULT_MODEL, temperature: float = 0.0, template_type: TemplateType=TemplateType.xml) -> str|None:
-    ret: str|None
+def llm_remove_unnecessary_newlines_and_generate_semantic_markup(
+    plain_txt: str,
+    ollama_model: str = _OLLAMA_DEFAULT_MODEL,
+    temperature: float = 0.0,
+    template_type: TemplateType = TemplateType.xml,
+) -> str | None:
+    ret: str | None
 
     lang: Literal["en", "de"] = guess_my_language(txt=plain_txt, ollama_model=ollama_model)
 
     msgs: list[Message] | None = None  # []
 
     prompt: str = get_reformat_and_semantically_markup_prompt(
-        md_or_plaintext=plain_txt,
-        lang=lang,
-        ollama_model=ollama_model,
-        template_type=template_type
+        md_or_plaintext=plain_txt, lang=lang, ollama_model=ollama_model, template_type=template_type
     )
 
     logger.debug(prompt)
@@ -408,8 +413,15 @@ def llm_remove_unnecessary_newlines_and_generate_semantic_markup(plain_txt: str,
     return ret
 
 
-def llm_create_outline_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollama_model: str = _OLLAMA_DEFAULT_MODEL, delete_other_llm_base: bool = True, temperature: float = 0.4, template_type: TemplateType=TemplateType.xml) -> Path | None:
-    outf_name: str = md_or_plaintxt_file.name[:md_or_plaintxt_file.name.rfind(".")] + "_outline."
+def llm_create_outline_file(
+    md_or_plaintxt_file: Path,
+    is_plaintext: bool,
+    ollama_model: str = _OLLAMA_DEFAULT_MODEL,
+    delete_other_llm_base: bool = True,
+    temperature: float = 0.4,
+    template_type: TemplateType = TemplateType.xml,
+) -> Path | None:
+    outf_name: str = md_or_plaintxt_file.name[: md_or_plaintxt_file.name.rfind(".")] + "_outline."
     outf_name_other: str = outf_name
     if is_plaintext:
         outf_name += MyFileTypes.txt.value
@@ -418,18 +430,16 @@ def llm_create_outline_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollam
         outf_name += MyFileTypes.md.value
         outf_name_other += MyFileTypes.txt.value
 
-    outf: Path = Path(md_or_plaintxt_file.parent.resolve(),
-                      outf_name)
+    outf: Path = Path(md_or_plaintxt_file.parent.resolve(), outf_name)
     outf.touch()
 
-    outf_other: Path = Path(md_or_plaintxt_file.parent.resolve(),
-                      outf_name_other)
+    outf_other: Path = Path(md_or_plaintxt_file.parent.resolve(), outf_name_other)
 
     if delete_other_llm_base:
         outf_other.unlink(missing_ok=True)
 
     md_or_plaintxt: str
-    with open(md_or_plaintxt_file, 'r') as infile:
+    with open(md_or_plaintxt_file, "r") as infile:
         md_or_plaintxt = infile.read()
 
     outline_text = llm_create_outline(
@@ -437,12 +447,12 @@ def llm_create_outline_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollam
         is_plaintext=is_plaintext,
         ollama_model=ollama_model,
         template_type=template_type,
-        temperature=temperature
+        temperature=temperature,
     )
 
     assert outline_text is not None
 
-    with open(outf, 'w') as outfile:
+    with open(outf, "w") as outfile:
         outfile.write(outline_text)
         outfile.flush()
 
@@ -450,7 +460,14 @@ def llm_create_outline_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollam
 
     return outf
 
-def guess_my_language(txt: str, print_response: bool=True, ollama_model: str = OLLAMA_GUESS_LANGUAGE_MODEL, print_msgs: bool = True, print_detect_txt: bool = True) -> Literal["en", "de"]:
+
+def guess_my_language(
+    txt: str,
+    print_response: bool = True,
+    ollama_model: str = OLLAMA_GUESS_LANGUAGE_MODEL,
+    print_msgs: bool = True,
+    print_detect_txt: bool = True,
+) -> Literal["en", "de"]:
     lang_detect_text: str = f"{txt[:min(len(txt), 512)]}".strip()
 
     lang: Literal["en", "de"] | None = None
@@ -460,16 +477,22 @@ def guess_my_language(txt: str, print_response: bool=True, ollama_model: str = O
     if print_detect_txt:
         logger.debug(f"\n{lang_detect_text=}\n")
 
-    ret: Literal['de', 'en'] | Tuple[Literal['de', 'en'], dict, dict] | None = None
+    ret: Literal["de", "en"] | Tuple[Literal["de", "en"], dict, dict] | None = None
     try:
-        ret = LanguageGuesser.guess_language(input_text=lang_detect_text, only_return_str=False,
-                                             ollama_host=OLLAMA_HOST, ollama_model=ollama_model,
-                                             ollama_options=get_ollama_options(ollama_model), print_msgs=print_msgs,
-                                             print_response=print_response, print_http_response=False,
-                                             print_http_request=False, max_retries=3)
+        ret = LanguageGuesser.guess_language(
+            input_text=lang_detect_text,
+            only_return_str=False,
+            ollama_host=OLLAMA_HOST,
+            ollama_model=ollama_model,
+            ollama_options=get_ollama_options(ollama_model),
+            print_msgs=print_msgs,
+            print_response=print_response,
+            print_http_response=False,
+            print_http_request=False,
+            max_retries=3,
+        )
     except Exception as ex:
         logger.exception(Helper.get_exception_tb_as_string(ex))
-
 
     if ret and isinstance(ret, tuple):
         lang, ollama_response, lang_detect_content = ret
@@ -482,20 +505,25 @@ def guess_my_language(txt: str, print_response: bool=True, ollama_model: str = O
 
 
 # _OLLAMA_DEFAULT_MODEL  # "llama3.1:70b-instruct-q3_K_M"  # "llama3.1:latest"  # "llama3.1:70b-instruct-q4_0"  #_OLLAMA_DEFAULT_MODEL  #"gemma2:27b"  #mixtral:latest"
-def llm_create_outline(md_or_plaintxt: str, is_plaintext: bool, ollama_model: str = _OLLAMA_DEFAULT_MODEL, temperature: float = 0.4, template_type: TemplateType=TemplateType.xml) -> str|None:
-    ret: str|None = None
+def llm_create_outline(
+    md_or_plaintxt: str,
+    is_plaintext: bool,
+    ollama_model: str = _OLLAMA_DEFAULT_MODEL,
+    temperature: float = 0.4,
+    template_type: TemplateType = TemplateType.xml,
+) -> str | None:
+    ret: str | None = None
 
     lang: Literal["en", "de"] = guess_my_language(txt=md_or_plaintxt, ollama_model=ollama_model)
 
     msgs: list[Message] | None = None  # []
 
-    system_prompt: str|None = llm_get_helpfull_atorney_system_prompt(lang="en", return_in_markdown=False if is_plaintext else True)  # always en!
+    system_prompt: str | None = llm_get_helpfull_atorney_system_prompt(
+        lang="en", return_in_markdown=False if is_plaintext else True
+    )  # always en!
 
     prompt: str = get_create_outline_prompt(
-        md_or_plaintext=md_or_plaintxt,
-        lang=lang,
-        ollama_model=ollama_model,
-        template_type=template_type
+        md_or_plaintext=md_or_plaintxt, lang=lang, ollama_model=ollama_model, template_type=template_type
     )
 
     logger.debug(system_prompt)
@@ -524,8 +552,15 @@ def llm_create_outline(md_or_plaintxt: str, is_plaintext: bool, ollama_model: st
     return ret
 
 
-def llm_create_summary_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollama_model: str = _OLLAMA_DEFAULT_MODEL, delete_other_llm_base: bool = True, temperature: float = 0.4, template_type: TemplateType=TemplateType.xml) -> Path | None:
-    outf_name: str = md_or_plaintxt_file.name[:md_or_plaintxt_file.name.rfind(".")] + "_summary."
+def llm_create_summary_file(
+    md_or_plaintxt_file: Path,
+    is_plaintext: bool,
+    ollama_model: str = _OLLAMA_DEFAULT_MODEL,
+    delete_other_llm_base: bool = True,
+    temperature: float = 0.4,
+    template_type: TemplateType = TemplateType.xml,
+) -> Path | None:
+    outf_name: str = md_or_plaintxt_file.name[: md_or_plaintxt_file.name.rfind(".")] + "_summary."
     outf_name_other: str = outf_name
     if is_plaintext:
         outf_name += MyFileTypes.txt.value
@@ -534,31 +569,29 @@ def llm_create_summary_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollam
         outf_name += MyFileTypes.md.value
         outf_name_other += MyFileTypes.txt.value
 
-    outf: Path = Path(md_or_plaintxt_file.parent.resolve(),
-                      outf_name)
+    outf: Path = Path(md_or_plaintxt_file.parent.resolve(), outf_name)
     outf.touch()
 
-    outf_other: Path = Path(md_or_plaintxt_file.parent.resolve(),
-                      outf_name_other)
+    outf_other: Path = Path(md_or_plaintxt_file.parent.resolve(), outf_name_other)
 
     if delete_other_llm_base:
         outf_other.unlink(missing_ok=True)
 
     md_or_plaintxt: str
-    with open(md_or_plaintxt_file, 'r') as infile:
+    with open(md_or_plaintxt_file, "r") as infile:
         md_or_plaintxt = infile.read()
 
-    summary_text: str|None = llm_create_summary(
+    summary_text: str | None = llm_create_summary(
         md_or_plaintxt=md_or_plaintxt,
         is_plaintext=is_plaintext,
         ollama_model=ollama_model,
         temperature=temperature,
-        template_type=template_type
+        template_type=template_type,
     )
 
     assert summary_text is not None
 
-    with open(outf, 'w') as outfile:
+    with open(outf, "w") as outfile:
         outfile.write(summary_text)
         outfile.flush()
 
@@ -568,20 +601,25 @@ def llm_create_summary_file(md_or_plaintxt_file: Path, is_plaintext: bool, ollam
 
 
 # _OLLAMA_DEFAULT_MODEL  # "llama3.1:70b-instruct-q3_K_M"  # "llama3.1:latest"  # "llama3.1:70b-instruct-q4_0"  #_OLLAMA_DEFAULT_MODEL  #"gemma2:27b"  #mixtral:latest"
-def llm_create_summary(md_or_plaintxt: str, is_plaintext: bool, ollama_model: str = _OLLAMA_DEFAULT_MODEL, temperature: float = 0.4, template_type: TemplateType=TemplateType.xml) -> str|None:
-    ret: str|None = None
+def llm_create_summary(
+    md_or_plaintxt: str,
+    is_plaintext: bool,
+    ollama_model: str = _OLLAMA_DEFAULT_MODEL,
+    temperature: float = 0.4,
+    template_type: TemplateType = TemplateType.xml,
+) -> str | None:
+    ret: str | None = None
 
     lang: Literal["en", "de"] = guess_my_language(txt=md_or_plaintxt, ollama_model=ollama_model)
 
     msgs: list[Message] | None = None  # []
 
-    system_prompt: str|None = llm_get_helpfull_atorney_system_prompt(lang="en", return_in_markdown=False if is_plaintext else True)
+    system_prompt: str | None = llm_get_helpfull_atorney_system_prompt(
+        lang="en", return_in_markdown=False if is_plaintext else True
+    )
 
     prompt: str = get_create_summary_prompt(
-        md_or_plaintext=md_or_plaintxt,
-        lang=lang,
-        ollama_model=ollama_model,
-        template_type=template_type
+        md_or_plaintext=md_or_plaintxt, lang=lang, ollama_model=ollama_model, template_type=template_type
     )
 
     logger.debug(system_prompt)
@@ -610,7 +648,14 @@ def llm_create_summary(md_or_plaintxt: str, is_plaintext: bool, ollama_model: st
     return ret
 
 
-def create_excerpt_files(md_or_plaintxt_file: Path, is_plaintext: bool, spacy_mode: bool = False, do_simple_md_split: bool = True, lang: Optional[Literal["en", "de"]] =None, delete_old_excerpts: bool = True) -> list[Path] | None:
+def create_excerpt_files(
+    md_or_plaintxt_file: Path,
+    is_plaintext: bool,
+    spacy_mode: bool = False,
+    do_simple_md_split: bool = True,
+    lang: Optional[Literal["en", "de"]] = None,
+    delete_old_excerpts: bool = True,
+) -> list[Path] | None:
     out_dir: Path = Path(md_or_plaintxt_file.parent.resolve(), "llm_excerpts")
     out_dir.mkdir(exist_ok=True)
     existing_files: Iterator[Path] = out_dir.glob("*")
@@ -623,27 +668,31 @@ def create_excerpt_files(md_or_plaintxt_file: Path, is_plaintext: bool, spacy_mo
 
     ret: list[Path] = []
 
-    nodes: List[TextNode|BaseNode] = parse_markdown_or_plaintext_semantically(
+    nodes: List[TextNode | BaseNode] = parse_markdown_or_plaintext_semantically(
         md_or_plaintext_file=md_or_plaintxt_file,
         is_plaintext=is_plaintext,
         spacy_mode=spacy_mode,
         do_simple_md_split=do_simple_md_split,
-        lang=lang)  # ignore lang for simple split
+        lang=lang,
+    )  # ignore lang for simple split
 
     for node in nodes:
         if not isinstance(node, TextNode):
             continue
 
-        logger.debug(
-            f"{type(node)=} {node.start_char_idx=} {node.end_char_idx=} {node.get_node_info()=}")
+        logger.debug(f"{type(node)=} {node.start_char_idx=} {node.end_char_idx=} {node.get_node_info()=}")
 
         node_data: dict = node.model_dump(mode="json", by_alias=True, exclude_none=True)
         logger.debug(Helper.get_pretty_dict_json_no_sort(node_data))
 
-        fromchar: int|None = node.start_char_idx
-        tochar: int|None = node.end_char_idx
+        fromchar: int | None = node.start_char_idx
+        tochar: int | None = node.end_char_idx
 
-        excerpt_name: str = md_or_plaintxt_file.name[:md_or_plaintxt_file.name.rfind(".")] + f"_excerpt_{fromchar}-{tochar}." + MyFileTypes.txt.value
+        excerpt_name: str = (
+            md_or_plaintxt_file.name[: md_or_plaintxt_file.name.rfind(".")]
+            + f"_excerpt_{fromchar}-{tochar}."
+            + MyFileTypes.txt.value
+        )
 
         txt_out: str = node.get_content().strip()
 
@@ -651,45 +700,47 @@ def create_excerpt_files(md_or_plaintxt_file: Path, is_plaintext: bool, spacy_mo
             continue
 
         out_f: Path = Path(out_dir, excerpt_name)
-        with open(out_f, 'w') as outfile:
+        with open(out_f, "w") as outfile:
             outfile.write(txt_out)
 
         ret.append(out_f)
 
+    return ret if len(ret) > 0 else None
 
-    return ret if len(ret)>0 else None
 
-
-def parse_markdown_or_plaintext_semantically(md_or_plaintext_file: Path,
-                                             is_plaintext: bool,
-                                             spacy_mode: bool = False,
-                                             do_simple_md_split: bool = True,
-                                             lang: Optional[Literal["en", "de"]] = None) -> List[TextNode|BaseNode]:
+def parse_markdown_or_plaintext_semantically(
+    md_or_plaintext_file: Path,
+    is_plaintext: bool,
+    spacy_mode: bool = False,
+    do_simple_md_split: bool = True,
+    lang: Optional[Literal["en", "de"]] = None,
+) -> List[TextNode | BaseNode]:
 
     md_or_plaintext_docs_flat: list[llama_index.core.schema.Document] = FlatReader().load_data(md_or_plaintext_file)
 
     if not lang:
         if spacy_mode or not do_simple_md_split:
-            lang = guess_my_language(
-                txt=md_or_plaintext_docs_flat[0].get_content()
-            )
+            lang = guess_my_language(txt=md_or_plaintext_docs_flat[0].get_content())
     logger.debug(f"LANG: {lang}")
 
-    doc_nodes: list[TextNode | BaseNode] = semantic_split(is_plaintext=is_plaintext,
-                                               spacy_mode=spacy_mode,
-                                               lang=lang,
-                                               doc=md_or_plaintext_docs_flat[0],
-                                               do_simple_md_split=do_simple_md_split
-                                               )  # do not pass in already parsed markdown-docs -> no str index and such...
+    doc_nodes: list[TextNode | BaseNode] = semantic_split(
+        is_plaintext=is_plaintext,
+        spacy_mode=spacy_mode,
+        lang=lang,
+        doc=md_or_plaintext_docs_flat[0],
+        do_simple_md_split=do_simple_md_split,
+    )  # do not pass in already parsed markdown-docs -> no str index and such...
     logger.debug(f"{len(doc_nodes)=}")
 
     text_out: StringIO = StringIO()
-    doc_node: TextNode|BaseNode
+    doc_node: TextNode | BaseNode
     for doc_node in doc_nodes:
         if not isinstance(doc_node, TextNode):
             continue
 
-        logger.debug(f"{type(doc_node)=} {doc_node.start_char_idx=} {doc_node.end_char_idx=} {doc_node.get_node_info()=}")
+        logger.debug(
+            f"{type(doc_node)=} {doc_node.start_char_idx=} {doc_node.end_char_idx=} {doc_node.get_node_info()=}"
+        )
 
         node_data: dict = doc_node.model_dump(mode="json", by_alias=True, exclude_none=True)
         logger.debug(Helper.get_pretty_dict_json_no_sort(node_data))
@@ -701,7 +752,10 @@ def parse_markdown_or_plaintext_semantically(md_or_plaintext_file: Path,
 
     return doc_nodes
 
-def parse_markdown(file: Path, remove_leading_comment_indent: bool = True, remove_triple_newline: bool = True) -> str | None:
+
+def parse_markdown(
+    file: Path, remove_leading_comment_indent: bool = True, remove_triple_newline: bool = True
+) -> str | None:
     # md_docs = MarkdownReader().load_data(file)
     md_docs = FlatReader().load_data(file)
     parser: MarkdownNodeParser = MarkdownNodeParser()
@@ -713,15 +767,17 @@ def parse_markdown(file: Path, remove_leading_comment_indent: bool = True, remov
     for doc_node in doc_nodes:
         # doc_node_parser: MarkdownNodeParser = MarkdownNodeParser()
 
-        text_nodes: list[TextNode] = parser.get_nodes_from_node(doc_node)  # doc_node_parser.get_nodes_from_node(doc_node)
+        text_nodes: list[TextNode] = parser.get_nodes_from_node(
+            doc_node
+        )  # doc_node_parser.get_nodes_from_node(doc_node)
         for node in text_nodes:
             # node_data: dict = node.model_dump(mode="json", by_alias=True, exclude_none=True)
             # logger.debug(Helper.get_pretty_dict_json_no_sort(node_data))
             ct: str = node.get_content()
             if remove_leading_comment_indent:
-                ct = re.sub(r'^> ', '', ct, flags=re.MULTILINE)
+                ct = re.sub(r"^> ", "", ct, flags=re.MULTILINE)
             if remove_triple_newline:
-                ct = re.sub(r'^\n\n\n', '\n', ct, flags=re.MULTILINE)
+                ct = re.sub(r"^\n\n\n", "\n", ct, flags=re.MULTILINE)
             text_out.write(ct)
 
     logger.debug(text_out.getvalue())
@@ -729,10 +785,14 @@ def parse_markdown(file: Path, remove_leading_comment_indent: bool = True, remov
     return text_out.getvalue()
 
 
-
 def semantic_split(
-        is_plaintext: bool, spacy_mode: bool, lang: Optional[Literal["en", "de"]], doc: llama_index.core.schema.Document,
-                   ollama_embed_model: str = _OLLAMA_DEFAULT_EMBED_MODEL, do_simple_md_split: bool = True) -> List[TextNode|BaseNode]:
+    is_plaintext: bool,
+    spacy_mode: bool,
+    lang: Optional[Literal["en", "de"]],
+    doc: llama_index.core.schema.Document,
+    ollama_embed_model: str = _OLLAMA_DEFAULT_EMBED_MODEL,
+    do_simple_md_split: bool = True,
+) -> List[TextNode | BaseNode]:
     def my_id_func(prefix: str, index: int, document: Any) -> str:
         # logger.debug(f"{index=} {document=}")
         return f"{prefix}-my-new-node-id-{index}"
@@ -748,7 +808,7 @@ def semantic_split(
 
     # logger.debug(f"{type(doc)=} {doc=}")
 
-    semantic_nodes: list[TextNode|BaseNode]
+    semantic_nodes: list[TextNode | BaseNode]
 
     if spacy_mode:
         raise RuntimeError("spacy mode is not supported at the moment (HT 20240905).")
@@ -775,7 +835,7 @@ def semantic_split(
         if do_simple_md_split and not is_plaintext:
             parser: MarkdownNodeParser = MarkdownNodeParser()
 
-            semantic_nodes = parser.get_nodes_from_documents([doc], show_progress=True) # type: ignore
+            semantic_nodes = parser.get_nodes_from_documents([doc], show_progress=True)  # type: ignore
             logger.debug(f"{len(semantic_nodes)=}")
             # for doc_node in doc_nodes:
             #     text_nodes: list[TextNode] = parser.get_nodes_from_node(doc_node)  # doc_node_parser.get_nodes_from_node(doc_node)
@@ -785,8 +845,7 @@ def semantic_split(
 
         else:
             embed_model: OllamaEmbedding = OllamaEmbedding(
-                model_name=ollama_embed_model,
-                base_url=ollama_adapter.OLLAMA_HOST
+                model_name=ollama_embed_model, base_url=ollama_adapter.OLLAMA_HOST
             )
 
             # breakpoint_percentile_threshold=
@@ -802,14 +861,9 @@ def semantic_split(
                 # sentence_splitter=my_sentence_splitter_callable
             )
 
-            semantic_nodes = semantic_splitter.get_nodes_from_documents(
-                documents=[doc],
-                show_progress=True
-            )
+            semantic_nodes = semantic_splitter.get_nodes_from_documents(documents=[doc], show_progress=True)
 
     return semantic_nodes
-
-
 
     # splitter = SentenceSplitter(
     #     chunk_size=1024,
@@ -817,7 +871,6 @@ def semantic_split(
     # )
     # nodes = splitter.get_nodes_from_documents(documents)
     # nodes[0]
-
 
     # from llama_index.embeddings.ollama import OllamaEmbedding
     #
@@ -834,6 +887,8 @@ def semantic_split(
     #
     # query_embedding = ollama_embedding.get_query_embedding("Where is blue?")
     # logger.debug(query_embedding)
+
+
 #
 #
 #
@@ -911,7 +966,6 @@ class MyFileTypes(StrEnum):
     any = auto()
 
 
-
 def get_files_by_ext_from_dir(filedir: Path, ext: MyFileTypes, maxret: int = -1) -> None | Path | list[Path]:
     files: list[str] = glob.glob("*" if ext == ext.any else f"*.{ext.value}", root_dir=filedir)
 
@@ -920,7 +974,8 @@ def get_files_by_ext_from_dir(filedir: Path, ext: MyFileTypes, maxret: int = -1)
     elif len(files) == 1 or maxret == 1:
         return Path(filedir, files[0])
 
-    return [Path(filedir, k) for num, k in enumerate(files) if num<maxret or maxret < 0]
+    return [Path(filedir, k) for num, k in enumerate(files) if num < maxret or maxret < 0]
+
 
 def yaml_raw_file_to_yaml_file(yaml_raw_file: Path, file_base_name: str, title: str) -> Path:
     outf: Path = Path(yaml_raw_file.parent.resolve(), file_base_name + "." + MyFileTypes.yaml.value)  # type: ignore
@@ -929,17 +984,14 @@ def yaml_raw_file_to_yaml_file(yaml_raw_file: Path, file_base_name: str, title: 
         return outf
 
     adi: ArleyDocumentInformation = ArleyDocumentInformation.from_xls_converted_yaml_file(
-        yaml_raw_file,
-        title=title,
-        doctype=DocTypeEnum.contract.value  # type: ignore
+        yaml_raw_file, title=title, doctype=DocTypeEnum.contract.value  # type: ignore
     )
-
 
     yaml_data: dict = adi.model_dump(mode="json", by_alias=True, exclude_none=True)
 
     logger.debug(Helper.get_dict_as_yaml_str(yaml_data))
 
-    with open(outf, 'w') as outfile:
+    with open(outf, "w") as outfile:
         yaml = ruamel.yaml.YAML()
         yaml.indent(sequence=4, offset=2)
 
@@ -948,11 +1000,14 @@ def yaml_raw_file_to_yaml_file(yaml_raw_file: Path, file_base_name: str, title: 
 
     return outf
 
-def main(docdir: Path,
-         plaintxt_based: bool = True,
-         llm_md_based_if_not_plaintxt_based: bool = True,
-         directly_convert_to_txt: bool = True,
-         delete_other_llm_base: bool = True) -> int:
+
+def main(
+    docdir: Path,
+    plaintxt_based: bool = True,
+    llm_md_based_if_not_plaintxt_based: bool = True,
+    directly_convert_to_txt: bool = True,
+    delete_other_llm_base: bool = True,
+) -> int:
     if not docdir.exists() or not docdir.is_dir():
         logger.error(f"{docdir} does not exist or is not a directory")
         return 123
@@ -963,18 +1018,15 @@ def main(docdir: Path,
 
     pdf_file: Path
     md_file: Path
-    md_llm_file: Path|None
+    md_llm_file: Path | None
     html_file: Path
     yaml_file: Path
-    yaml_raw_file: Path|None
-    llm_summary_file: Path|None
-    llm_outline_file: Path|None
-
+    yaml_raw_file: Path | None
+    llm_summary_file: Path | None
+    llm_outline_file: Path | None
 
     docx_file: None | Path | list[Path] = get_files_by_ext_from_dir(
-        filedir=docdir,
-        ext=MyFileTypes.docx,
-        maxret=1
+        filedir=docdir, ext=MyFileTypes.docx, maxret=1
     )  # must only be ONE in that dir
 
     assert isinstance(docx_file, Path)
@@ -982,7 +1034,7 @@ def main(docdir: Path,
     if not docx_file or not docx_file.is_file():
         raise Exception(f"Invalid file {docx_file=}")
 
-    file_basename: str = docx_file.name[0:docx_file.name.rfind(".")]  # type: ignore
+    file_basename: str = docx_file.name[0 : docx_file.name.rfind(".")]  # type: ignore
 
     xlsx_file: Path = Path(docx_file.parent, f"{file_basename}.{MyFileTypes.xlsx.value}")
     if not xlsx_file or not xlsx_file.is_file():
@@ -993,12 +1045,10 @@ def main(docdir: Path,
     assert yaml_raw_file is not None
 
     yaml_file = yaml_raw_file_to_yaml_file(
-        yaml_raw_file=yaml_raw_file,
-        file_base_name=file_basename,
-        title=file_basename
+        yaml_raw_file=yaml_raw_file, file_base_name=file_basename, title=file_basename
     )
 
-    adi: ArleyDocumentInformation|None = ArleyDocumentInformation.from_yaml_model_file(yaml_file)
+    adi: ArleyDocumentInformation | None = ArleyDocumentInformation.from_yaml_model_file(yaml_file)
     lang: Literal["en", "de"] = adi.lang.value  # type: ignore
 
     ret_pdf, pdf_file = docx_to_pdf_via_subprocess(docx_file)  # type: ignore
@@ -1010,10 +1060,10 @@ def main(docdir: Path,
     if directly_convert_to_txt:
         txt_ret, txt_file = docx_to_txt_via_subprocess(docx_file)  # type: ignore
     else:
-        txt: str|None = parse_markdown(file=md_file, remove_leading_comment_indent=True)
+        txt: str | None = parse_markdown(file=md_file, remove_leading_comment_indent=True)
         txt_file = Path(docdir, file_basename + "." + MyFileTypes.txt)
         if txt is not None:
-            with open(txt_file, 'w') as outfile:
+            with open(txt_file, "w") as outfile:
                 outfile.write(txt)
                 outfile.flush()
 
@@ -1029,17 +1079,19 @@ def main(docdir: Path,
     if plaintxt_based:
         base_file = txt_file
 
-
-
-    llm_summary_file = llm_create_summary_file(md_or_plaintxt_file=base_file, is_plaintext=plaintxt_based, delete_other_llm_base=delete_other_llm_base)
-    llm_outline_file = llm_create_outline_file(md_or_plaintxt_file=base_file, is_plaintext=plaintxt_based, delete_other_llm_base=delete_other_llm_base)
+    llm_summary_file = llm_create_summary_file(
+        md_or_plaintxt_file=base_file, is_plaintext=plaintxt_based, delete_other_llm_base=delete_other_llm_base
+    )
+    llm_outline_file = llm_create_outline_file(
+        md_or_plaintxt_file=base_file, is_plaintext=plaintxt_based, delete_other_llm_base=delete_other_llm_base
+    )
 
     excerpts: list[Path] | None = create_excerpt_files(
         md_or_plaintxt_file=base_file,
         is_plaintext=plaintxt_based,
         lang=lang,
         do_simple_md_split=False,
-        spacy_mode=False
+        spacy_mode=False,
     )
 
     if excerpts is not None:
@@ -1068,24 +1120,24 @@ def main(docdir: Path,
         is_plaintext=plaintxt_based,
         llm_summary_file=llm_summary_file,
         llm_outline_file=llm_outline_file,
-        excerpts=excerpts
+        excerpts=excerpts,
     )
 
     return 0
 
+
 def importdirtovectorstore(
-        basedir: Path,
-        plaintext_based: bool,
-        llm_md_based_if_not_plaintxt_based: bool = True) -> int:
+    basedir: Path, plaintext_based: bool, llm_md_based_if_not_plaintxt_based: bool = True
+) -> int:
     if not basedir.exists() or not basedir.is_dir():
         raise RuntimeError(f"{basedir.resolve()} does not exist or is not a directory")
 
     adi: ArleyDocumentInformation | None = None
 
     txt_base_file: Path | None = None
-    md_base_file: Path|None = None
-    llm_summary_file: Path|None = None
-    llm_outline_file: Path|None = None
+    md_base_file: Path | None = None
+    llm_summary_file: Path | None = None
+    llm_outline_file: Path | None = None
 
     for mefile in basedir.glob("*"):
         logger.debug(f"{mefile.resolve()}")
@@ -1106,7 +1158,6 @@ def importdirtovectorstore(
         elif mefile.name.endswith(".yaml"):
             adi = ArleyDocumentInformation.from_yaml_model_file(mefile)
 
-
     assert md_base_file is not None and txt_base_file is not None
 
     base_file: Path = md_base_file
@@ -1122,33 +1173,31 @@ def importdirtovectorstore(
     if not llm_summary_file or not llm_outline_file or not llm_summary_file or not adi or not base_file:
         raise RuntimeError(f"invalid data {adi==None=} {llm_summary_file=} {llm_outline_file=} {base_file=}")
 
-    importtovectorstore(adi=adi,
-                        md_or_plaintxt_file=base_file,
-                        is_plaintext=plaintext_based,
-                        llm_summary_file=llm_summary_file,
-                        llm_outline_file=llm_outline_file,
-                        excerpts=excerpts
-                        )
+    importtovectorstore(
+        adi=adi,
+        md_or_plaintxt_file=base_file,
+        is_plaintext=plaintext_based,
+        llm_summary_file=llm_summary_file,
+        llm_outline_file=llm_outline_file,
+        excerpts=excerpts,
+    )
 
     return 0
 
 
 def importtovectorstore(
-        adi: ArleyDocumentInformation,
-        md_or_plaintxt_file: Path,
-        is_plaintext: bool,
-        llm_summary_file: Path,
-        llm_outline_file: Path,
-        excerpts: list[Path],
-        collectionname: str = _CHROMADB_DEFAULT_COLLECTION_NAME) -> int:
+    adi: ArleyDocumentInformation,
+    md_or_plaintxt_file: Path,
+    is_plaintext: bool,
+    llm_summary_file: Path,
+    llm_outline_file: Path,
+    excerpts: list[Path],
+    collectionname: str = _CHROMADB_DEFAULT_COLLECTION_NAME,
+) -> int:
     cdbconnection: ChromaDBConnection = ChromaDBConnection.get_instance()
     cdbcollection: ChromaCollection = cdbconnection.get_or_create_collection(collectionname)
 
-    fsmap: dict[str, Path] = {
-        "file": md_or_plaintxt_file,
-        "summary": llm_summary_file,
-        "outline": llm_outline_file
-    }
+    fsmap: dict[str, Path] = {"file": md_or_plaintxt_file, "summary": llm_summary_file, "outline": llm_outline_file}
 
     parent_id_for_excerpts: str = str(adi.id)
     parent_file_name_for_excerpts: str = md_or_plaintxt_file.name
@@ -1157,7 +1206,7 @@ def importtovectorstore(
     for mefile in excerpts:
         fsmap[str(mefile.resolve())] = mefile
 
-    for filename in fsmap:  #.keys():
+    for filename in fsmap:  # .keys():
         my_id: str = str(adi.id)
 
         mefile = fsmap[filename]
@@ -1194,30 +1243,25 @@ def importtovectorstore(
                 metadata["parent_file_name"] = parent_file_name_for_excerpts
                 metadata["parent_id"] = parent_id_for_excerpts
 
-                range_str: str = mefile.name[mefile.name.rfind("_")+1:]
-                range_str = range_str[0:range_str.rfind(".")]
+                range_str: str = mefile.name[mefile.name.rfind("_") + 1 :]
+                range_str = range_str[0 : range_str.rfind(".")]
 
                 logger.debug(f"{mefile.name=} {range_str=}")
 
-                range_from: int = int(range_str[0:range_str.rfind("-")])
-                range_to: int = int(range_str[range_str.rfind("-")+1:])
+                range_from: int = int(range_str[0 : range_str.rfind("-")])
+                range_to: int = int(range_str[range_str.rfind("-") + 1 :])
 
                 my_id = f"{my_id}_excerpt_{range_str}"
 
         metadata["id"] = my_id
 
-        with open(mefile, 'r') as infile:
+        with open(mefile, "r") as infile:
             txt: str = infile.read()
 
             logger.debug(Helper.get_pretty_dict_json_no_sort(metadata))
             logger.debug(txt)
 
-            cdbconnection.add_document(
-                cdbcollection=cdbcollection,
-                doc_id=my_id,
-                document=txt,
-                metadata=metadata
-            )
+            cdbconnection.add_document(cdbcollection=cdbcollection, doc_id=my_id, document=txt, metadata=metadata)
 
         if is_main_file:
             metadata["parent_full_path"] = parent_full_path_for_excerpts
@@ -1228,12 +1272,8 @@ def importtovectorstore(
             my_id = f"{str(adi.id)}_catlookup"
 
             cdbconnection.add_document(
-                cdbcollection=cdbcollection,
-                doc_id=my_id,
-                document=metadata["categorization_tags"],
-                metadata=metadata
+                cdbcollection=cdbcollection, doc_id=my_id, document=metadata["categorization_tags"], metadata=metadata
             )
-
 
             if metadata.get("categorization_targeted_by_prompts"):
                 metadata["doctype"] = DocTypeEnum.targeted_by_prompts_lookup.value
@@ -1242,16 +1282,13 @@ def importtovectorstore(
                     cdbcollection=cdbcollection,
                     doc_id=my_id,
                     document=metadata["categorization_targeted_by_prompts"],
-                    metadata=metadata
+                    metadata=metadata,
                 )
 
             metadata["doctype"] = DocTypeEnum.title_lookup.value
             my_id = f"{str(adi.id)}_titlelookup"
             cdbconnection.add_document(
-                cdbcollection=cdbcollection,
-                doc_id=my_id,
-                document=metadata["categorization_titles"],
-                metadata=metadata
+                cdbcollection=cdbcollection, doc_id=my_id, document=metadata["categorization_titles"], metadata=metadata
             )
 
     return 0
@@ -1267,85 +1304,61 @@ def main_cli() -> int:
     delete_old_excerpts: bool = True
     delete_other_llm_base: bool = False
 
-
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
-        prog='importhelper.py')  # , usage='%(prog)s cmd [options]')
+        prog="importhelper.py"
+    )  # , usage='%(prog)s cmd [options]')
 
-    subparsers = parser.add_subparsers(dest='cmd')
+    subparsers = parser.add_subparsers(dest="cmd")
     subparsers.required = True
 
     #  subparser for convert
-    parser_convert = subparsers.add_parser('convert')
+    parser_convert = subparsers.add_parser("convert")
     # add a required argument
-    parser_convert.add_argument('dir',
-                                type=str,
-                                nargs="?",
-                                default=str(Path(Path.home(),"ki_vertragsmuster"))
-                                )
+    parser_convert.add_argument("dir", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster")))
 
-    parser_parsemd = subparsers.add_parser('parsemd')
+    parser_parsemd = subparsers.add_parser("parsemd")
     # add a required argument
-    parser_parsemd.add_argument('file',
-                                type=str,
-                                nargs="?",
-                                default=str(Path(Path.home(),"ki_vertragsmuster/NDA.md"))
-                                )
+    parser_parsemd.add_argument("file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA.md")))
 
-    parser_parsemd = subparsers.add_parser('parsepdf')
+    parser_parsemd = subparsers.add_parser("parsepdf")
     # add a required argument
-    parser_parsemd.add_argument('file',
-                                type=str,
-                                nargs="?",
-                                default=str(Path(Path.home(),"ki_vertragsmuster/NDA.pdf"))
-                                )
+    parser_parsemd.add_argument(
+        "file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA.pdf"))
+    )
 
-    parser_llmparse = subparsers.add_parser('llmparse')
+    parser_llmparse = subparsers.add_parser("llmparse")
     # add a required argument
-    parser_llmparse.add_argument('file',
-                                type=str,
-                                nargs="?",
-                                default=str(Path(Path.home(),"ki_vertragsmuster/NDA.txt"))
-                                )
+    parser_llmparse.add_argument(
+        "file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA.txt"))
+    )
 
-    parser_llmsummary = subparsers.add_parser('llmsummary')
+    parser_llmsummary = subparsers.add_parser("llmsummary")
     # add a required argument
-    parser_llmsummary.add_argument('file',
-                                 type=str,
-                                 nargs="?",
-                                 default=str(Path(Path.home(),"ki_vertragsmuster/NDA_llm.md"))
-                                 )
+    parser_llmsummary.add_argument(
+        "file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA_llm.md"))
+    )
 
-    parser_llmoutline = subparsers.add_parser('llmoutline')
+    parser_llmoutline = subparsers.add_parser("llmoutline")
     # add a required argument
-    parser_llmoutline.add_argument('file',
-                                   type=str,
-                                   nargs="?",
-                                   default=str(Path(Path.home(),"ki_vertragsmuster/NDA_llm.md"))
-                                   )
+    parser_llmoutline.add_argument(
+        "file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA_llm.md"))
+    )
 
-    parser_parsemdsemantically = subparsers.add_parser('parsemdsemantically')
+    parser_parsemdsemantically = subparsers.add_parser("parsemdsemantically")
     # add a required argument
-    parser_parsemdsemantically.add_argument('file',
-                                type=str,
-                                nargs="?",
-                                default=str(Path(Path.home(),"ki_vertragsmuster/NDA_llm.md"))
-                                )
+    parser_parsemdsemantically.add_argument(
+        "file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA_llm.md"))
+    )
 
-    parser_createexcerptfiles = subparsers.add_parser('createexcerptfiles')
+    parser_createexcerptfiles = subparsers.add_parser("createexcerptfiles")
     # add a required argument
-    parser_createexcerptfiles.add_argument('file',
-                                            type=str,
-                                            nargs="?",
-                                            default=str(Path(Path.home(),"ki_vertragsmuster/NDA_llm.md"))
-                                            )
+    parser_createexcerptfiles.add_argument(
+        "file", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster/NDA_llm.md"))
+    )
 
-    parser_import = subparsers.add_parser('importdirtovectorstore')
+    parser_import = subparsers.add_parser("importdirtovectorstore")
     # add a required argument
-    parser_import.add_argument('dir',
-                                           type=str,
-                                           nargs="?",
-                                           default=str(Path(Path.home(),"ki_vertragsmuster"))
-                                           )
+    parser_import.add_argument("dir", type=str, nargs="?", default=str(Path(Path.home(), "ki_vertragsmuster")))
 
     logger.debug(sys.argv)
     ns: argparse.Namespace = parser.parse_args(sys.argv[1:])
@@ -1353,60 +1366,72 @@ def main_cli() -> int:
     _ret: int = -1
     mdfile: Path
 
-    if ns.cmd == 'convert':
+    if ns.cmd == "convert":
         docdir: Path = Path(ns.dir)
         _ret = main(
             docdir=docdir,
             plaintxt_based=plaintext_based,
             directly_convert_to_txt=directly_convert_to_txt,
             llm_md_based_if_not_plaintxt_based=llm_md_based_if_not_plaintxt_based,
-            delete_other_llm_base=delete_other_llm_base
+            delete_other_llm_base=delete_other_llm_base,
         )
-    elif ns.cmd == 'parsepdf':
+    elif ns.cmd == "parsepdf":
         pdffile: Path = Path(ns.file)
         _ret = parse_pdf(pdffile)
-    elif ns.cmd == 'parsemd':
+    elif ns.cmd == "parsemd":
         mdfile = Path(ns.file)
         _ret = 0 if parse_markdown(mdfile) else 234
-    elif ns.cmd == 'parsemdsemantically':
+    elif ns.cmd == "parsemdsemantically":
         mdfile = Path(ns.file)
-        _ret = 0 if parse_markdown_or_plaintext_semantically(
-            md_or_plaintext_file=mdfile,
-            is_plaintext=mdfile.name.endswith("txt"),
-            lang=None
-        ) else 789
-    elif ns.cmd == 'createexcerptfiles':
+        _ret = (
+            0
+            if parse_markdown_or_plaintext_semantically(
+                md_or_plaintext_file=mdfile, is_plaintext=mdfile.name.endswith("txt"), lang=None
+            )
+            else 789
+        )
+    elif ns.cmd == "createexcerptfiles":
         mdfile = Path(ns.file)
-        _ret = 0 if create_excerpt_files(md_or_plaintxt_file=mdfile,
-                                         is_plaintext=mdfile.name.endswith("txt"),
-                                         do_simple_md_split=do_simple_md_split,
-                                         spacy_mode=spacy_mode,
-                                         delete_old_excerpts=delete_old_excerpts,
-                                         lang=None) else 456
-    elif ns.cmd == 'llmparse':
+        _ret = (
+            0
+            if create_excerpt_files(
+                md_or_plaintxt_file=mdfile,
+                is_plaintext=mdfile.name.endswith("txt"),
+                do_simple_md_split=do_simple_md_split,
+                spacy_mode=spacy_mode,
+                delete_old_excerpts=delete_old_excerpts,
+                lang=None,
+            )
+            else 456
+        )
+    elif ns.cmd == "llmparse":
         txtfile: Path = Path(ns.file)
         _ret = 0 if llm_remove_unnecessary_newlines_and_generate_semantic_markup_file(txtfile) else 345
-    elif ns.cmd == 'llmsummary':
+    elif ns.cmd == "llmsummary":
         mdfile = Path(ns.file)
         _ret = 0 if llm_create_summary_file(mdfile, is_plaintext=False) else 101
-    elif ns.cmd == 'llmoutline':
+    elif ns.cmd == "llmoutline":
         mdfile = Path(ns.file)
         _ret = 0 if llm_create_outline_file(mdfile, is_plaintext=False) else 910
-    elif ns.cmd == 'importdirtovectorstore':
+    elif ns.cmd == "importdirtovectorstore":
         docdir = Path(ns.dir)
-        _ret = 0 if importdirtovectorstore(basedir=docdir,
-                                           plaintext_based=plaintext_based,
-                                           llm_md_based_if_not_plaintxt_based=llm_md_based_if_not_plaintxt_based
-                                           ) else 111
+        _ret = (
+            0
+            if importdirtovectorstore(
+                basedir=docdir,
+                plaintext_based=plaintext_based,
+                llm_md_based_if_not_plaintxt_based=llm_md_based_if_not_plaintxt_based,
+            )
+            else 111
+        )
 
     return _ret
+
 
 if __name__ == "__main__":
     _OLLAMA_DEFAULT_MODEL = "hermes3:8b-llama3.1-fp16"  # "nous-hermes2-mixtral:8x7b"  # hermes3:70b-llama3.1-q4_0"  # "hermes3:latest"  # hermes3:70b-llama3.1-q4_0"  # "nous-hermes2-mixtral:8x7b"
 
     exit(main_cli())
-
-
 
     # https://stackoverflow.com/questions/25626109/python-argparse-conditionally-required-arguments/70716254#70716254
 
@@ -1443,4 +1468,3 @@ if __name__ == "__main__":
     # parser.add_argument("--config-2", required=checks.server_2)
     #
     # parsed_args = parser.parse_args()
-

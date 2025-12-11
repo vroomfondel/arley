@@ -1,26 +1,23 @@
 import json
 import time
-from typing import Any, Mapping, Iterator, Literal
-
-from ollama import Message
-
-from arley.config import settings, OLLAMA_HOST, get_ollama_options
-from arley import Helper
-from arley.llm.language_guesser import LanguageGuesser
-from arley.llm.ollama_adapter import _get_fc_call_generate_priming_history, function_call_generate, \
-    ask_ollama_chat, purge_model, _parse_json_backticked
+from typing import Any, Iterator, Literal, Mapping
 
 from loguru import logger
+from ollama import Message
 
-from arley.llm.ollama_tools import FUNCTION_SCHEMA, TOOLSSTRING, TOOLSLIST_OLLAMA_TOOL_STYLE, ToolBox
+from arley import Helper
+from arley.config import OLLAMA_HOST, get_ollama_options, settings
+from arley.llm.language_guesser import LanguageGuesser
+from arley.llm.ollama_adapter import (_get_fc_call_generate_priming_history,
+                                      _parse_json_backticked, ask_ollama_chat,
+                                      function_call_generate, purge_model)
+from arley.llm.ollama_tools import (FUNCTION_SCHEMA,
+                                    TOOLSLIST_OLLAMA_TOOL_STYLE, TOOLSSTRING,
+                                    ToolBox)
 
 
 def add_and_update_metrics_in_place(
-        results_dict: dict,
-        eval_dict: dict,
-        ollama_response: dict,
-        this_eval_start: float,
-        this_eval_end: float
+    results_dict: dict, eval_dict: dict, ollama_response: dict, this_eval_start: float, this_eval_end: float
 ) -> None:
 
     # logger.debug(f"RESPONSE(CONTENT_STRIPPED_OUT):\n{Helper.get_pretty_dict_json_no_sort(ollama_response)}")
@@ -40,7 +37,8 @@ def add_and_update_metrics_in_place(
         eval_dict["prompt_eval_duration_s"] += results_dict["prompt_eval_duration_s"]
         eval_dict["eval_duration_s"] += results_dict["eval_duration_s"]
     except Exception as e:
-        logger.error("SKIPPERD: "+str(e))
+        logger.error("SKIPPERD: " + str(e))
+
 
 def fc_compare(desired: dict[str, Any], got: dict[str, Any]) -> bool:
     # logger.debug(f"DESIRED:\n{Helper.get_pretty_dict_json_no_sort(desired)}\n"
@@ -83,9 +81,12 @@ def fc_compare(desired: dict[str, Any], got: dict[str, Any]) -> bool:
     return True
 
 
-def fc_eval_func(model: str, ret: dict | None,
-                 ollama_return_format: Literal["", "json"] = "json",
-                 allow_backticked_json: bool = False) -> dict:
+def fc_eval_func(
+    model: str,
+    ret: dict | None,
+    ollama_return_format: Literal["", "json"] = "json",
+    allow_backticked_json: bool = False,
+) -> dict:
     fc_eval_start = time.perf_counter()
     fc_eval: dict = {}
 
@@ -103,9 +104,7 @@ def fc_eval_func(model: str, ret: dict | None,
     fc_questions: dict = {}
     # just recycling the priming questions...
     msgs: list[Message] = _get_fc_call_generate_priming_history(
-        function_schema=FUNCTION_SCHEMA,
-        toolstring=TOOLSSTRING,
-        allow_backticked_json=allow_backticked_json
+        function_schema=FUNCTION_SCHEMA, toolstring=TOOLSSTRING, allow_backticked_json=allow_backticked_json
     )
 
     logger.info(f"SYSTEM_PROMPT:\n{msgs[0]["content"]}")
@@ -135,7 +134,7 @@ def fc_eval_func(model: str, ret: dict | None,
             num_predict=-1,
             print_msgs=False,
             print_response=True,
-            print_options=False
+            print_options=False,
         )
 
         this_fc_eval_end = time.perf_counter()
@@ -150,7 +149,6 @@ def fc_eval_func(model: str, ret: dict | None,
         else:
             desired_result = json.loads(fc_questions[fctest_question])
 
-
         if fc:
             ollama_response, content = fc
 
@@ -161,7 +159,7 @@ def fc_eval_func(model: str, ret: dict | None,
                 eval_dict=fc_eval,
                 ollama_response=ollama_response,
                 this_eval_start=this_fc_eval_start,
-                this_eval_end=this_fc_eval_end
+                this_eval_end=this_fc_eval_end,
             )
 
             # logger.debug(f"RESPONSE(CONTENT_STRIPPED_OUT):\n{Helper.get_pretty_dict_json_no_sort(response)}")
@@ -173,7 +171,6 @@ def fc_eval_func(model: str, ret: dict | None,
             #     "prompt_eval_duration": 12842000,
             #     "eval_duration": 699493000
 
-
             # if desired_result == content:
             if fc_compare(desired_result, content):
                 fc_success = True
@@ -182,7 +179,8 @@ def fc_eval_func(model: str, ret: dict | None,
                 ToolBox.get_instance().execute_tool_function(content["functionName"], content["parameters"])
             else:
                 logger.debug(
-                    f"FC MISMATCH:\nGOT:\n{Helper.get_pretty_dict_json_no_sort(content)}\n\tVS\nDESIRED:\n{Helper.get_pretty_dict_json_no_sort(desired_result)}")
+                    f"FC MISMATCH:\nGOT:\n{Helper.get_pretty_dict_json_no_sort(content)}\n\tVS\nDESIRED:\n{Helper.get_pretty_dict_json_no_sort(desired_result)}"
+                )
         else:
             logger.error("FC_RESP IS NONE")
 
@@ -195,10 +193,11 @@ def fc_eval_func(model: str, ret: dict | None,
 
 
 def lang_eval(
-        model: str,
-        ret: dict | None,
-        ollama_return_format: Literal["", "json"] = "json",
-        allow_backticked_json: bool = False) -> dict:
+    model: str,
+    ret: dict | None,
+    ollama_return_format: Literal["", "json"] = "json",
+    allow_backticked_json: bool = False,
+) -> dict:
 
     lang_eval_start = time.perf_counter()
     lang_eval: dict = {}
@@ -239,11 +238,18 @@ def lang_eval(
         lang_results[langq] = {}
         this_lang_eval_start = time.perf_counter()
 
-
-        res = LanguageGuesser.guess_language(input_text=langq, only_return_str=False, ollama_host=OLLAMA_HOST,
-                                             ollama_model=model, ollama_options=get_ollama_options(model),
-                                             print_msgs=True, print_response=True, print_http_response=False,
-                                             print_http_request=False, max_retries=3)
+        res = LanguageGuesser.guess_language(
+            input_text=langq,
+            only_return_str=False,
+            ollama_host=OLLAMA_HOST,
+            ollama_model=model,
+            ollama_options=get_ollama_options(model),
+            print_msgs=True,
+            print_response=True,
+            print_http_response=False,
+            print_http_request=False,
+            max_retries=3,
+        )
 
         if res:
             lang, ollama_response, lang_detect_content = res  # type: ignore
@@ -253,11 +259,7 @@ def lang_eval(
         this_lang_eval_end = time.perf_counter()
 
         add_and_update_metrics_in_place(
-            lang_results[langq],
-            lang_eval,
-            ollama_response,
-            this_lang_eval_start,
-            this_lang_eval_end
+            lang_results[langq], lang_eval, ollama_response, this_lang_eval_start, this_lang_eval_end
         )
 
         # logger.debug(Helper.get_pretty_dict_json_no_sort(ollama_response)
@@ -278,7 +280,6 @@ def lang_eval(
     # lang_results["run_time_s"] = lang_eval_end - lang_eval_start
 
     return lang_eval
-
 
 
 # TODO HT 20240717 INPLACE DETECTION OF FUNCTION-CALLS
@@ -368,9 +369,13 @@ def lang_eval(
 #     return fc_eval
 
 
-
-def basic_evalrun(model: str = "llama3:latest", lang_ollama_return_format: Literal["", "json"] = "json", lang_allow_backticked_json: bool = False,
-                  fc_ollama_return_format: Literal["", "json"] = "json", fc_allow_backticked_json: bool = False) -> dict:
+def basic_evalrun(
+    model: str = "llama3:latest",
+    lang_ollama_return_format: Literal["", "json"] = "json",
+    lang_allow_backticked_json: bool = False,
+    fc_ollama_return_format: Literal["", "json"] = "json",
+    fc_allow_backticked_json: bool = False,
+) -> dict:
     ret: dict = {}
 
     start_time = time.perf_counter()
@@ -385,7 +390,7 @@ def basic_evalrun(model: str = "llama3:latest", lang_ollama_return_format: Liter
         system_prompt="you are a very smart ai engine.",
         model=model,
         print_response=True,
-        prompt=""  # empty prompt to preload model  # https://github.com/ollama/ollama/issues/2431
+        prompt="",  # empty prompt to preload model  # https://github.com/ollama/ollama/issues/2431
     )
 
     preload: dict = {}
@@ -401,7 +406,7 @@ def basic_evalrun(model: str = "llama3:latest", lang_ollama_return_format: Liter
         model=model,
         ret=ret,
         ollama_return_format=lang_ollama_return_format,
-        allow_backticked_json=lang_allow_backticked_json
+        allow_backticked_json=lang_allow_backticked_json,
     )
     lang_results: dict = lang_eval_dict["results"]
 
@@ -416,14 +421,13 @@ def basic_evalrun(model: str = "llama3:latest", lang_ollama_return_format: Liter
 
     logger.debug(f"LANG OVERALL_SUCCESS for {model=}: {(success*100/len(lang_results)):.2f}%")
 
-
     ##################
     ### fc test stuff
     fc_eval_dict: dict = fc_eval_func(
         model=model,
         ret=ret,
         ollama_return_format=fc_ollama_return_format,
-        allow_backticked_json=fc_allow_backticked_json
+        allow_backticked_json=fc_allow_backticked_json,
     )
     fc_results: dict = fc_eval_dict["results"]
 
@@ -459,7 +463,6 @@ def main() -> dict[str, dict[str, Any]]:
     # "llama3:latest"
     # "mixtral:latest",
 
-
     all_results: dict[str, dict[str, Any]] = {}
     for i in [
         # "llama3.1:70b-instruct-q3_K_M",
@@ -475,13 +478,11 @@ def main() -> dict[str, dict[str, Any]]:
         # "mixtral:8x7b-instruct-v0.1-q8_0"
     ]:
 
-
         lang_allow_backticked_json = False
         lang_ollama_return_format: Literal["", "json"] = "json"
 
         fc_allow_backticked_json = False
         fc_ollama_return_format: Literal["", "json"] = "json"
-
 
         if ALLOW_JSON_RETURN_FOR_MIXTRAL and i.find("mixtral") >= 0:
             lang_allow_backticked_json = True
@@ -490,14 +491,12 @@ def main() -> dict[str, dict[str, Any]]:
             fc_allow_backticked_json = True
             fc_ollama_return_format = ""
 
-
         this_model_results: dict = basic_evalrun(
             model=i,
             lang_ollama_return_format=lang_ollama_return_format,
             lang_allow_backticked_json=lang_allow_backticked_json,
-
             fc_ollama_return_format=fc_ollama_return_format,
-            fc_allow_backticked_json=fc_allow_backticked_json
+            fc_allow_backticked_json=fc_allow_backticked_json,
         )
 
         all_results[i] = this_model_results
@@ -510,4 +509,3 @@ def main() -> dict[str, dict[str, Any]]:
 if __name__ == "__main__":
     ALLOW_JSON_RETURN_FOR_MIXTRAL: bool = True
     main()
-

@@ -3,12 +3,11 @@ import os
 import sys
 from enum import StrEnum, auto
 from pathlib import Path
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Type
 
 import pytz
-from typing import Type, Tuple, Optional, Literal, List, Any, Dict, ClassVar
-
-from cachetools import cached, TTLCache
-from pydantic import BaseModel, Field, HttpUrl, RootModel, PostgresDsn
+from cachetools import TTLCache, cached
+from pydantic import BaseModel, Field, HttpUrl, PostgresDsn, RootModel
 
 _CONFIGDIRPATH: Path = Path(__file__).parent.resolve()
 _CONFIGDIRPATH = Path(os.getenv("ARLEY_CONFIG_DIR_PATH")) if os.getenv("ARLEY_CONFIG_DIR_PATH") else _CONFIGDIRPATH  # type: ignore
@@ -20,27 +19,21 @@ _CONFIGLOCALPATH: Path = Path(_CONFIGDIRPATH, "config.local.yaml")
 _CONFIGLOCALPATH = Path(os.getenv("ARLEY_CONFIG_LOCAL_PATH")) if os.getenv("ARLEY_CONFIG_LOCAL_PATH") else _CONFIGLOCALPATH  # type: ignore
 
 
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-    PydanticBaseSettingsSource,
-    EnvSettingsSource,
-    YamlConfigSettingsSource,
-    InitSettingsSource,
-    DotEnvSettingsSource,
-)
-
 from loguru import logger
+from pydantic_settings import (BaseSettings, DotEnvSettingsSource,
+                               EnvSettingsSource, InitSettingsSource,
+                               PydanticBaseSettingsSource, SettingsConfigDict,
+                               YamlConfigSettingsSource)
 
 # https://buildmedia.readthedocs.org/media/pdf/loguru/latest/loguru.pdf
 os.environ["LOGURU_LEVEL"] = os.getenv("LOGURU_LEVEL", "DEBUG")  # standard is DEBUG
 logger.remove()  # remove default-handler
-logger_fmt: str = "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
+logger_fmt: str = (
+    "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
+)
 #
 logger.add(
-    sys.stderr,
-    level=os.getenv("LOGURU_LEVEL"),  # type: ignore
-    format=logger_fmt
+    sys.stderr, level=os.getenv("LOGURU_LEVEL"), format=logger_fmt  # type: ignore
 )  # TRACE | DEBUG | INFO | WARN | ERROR |  FATAL
 logger.configure(extra={"classname": "None"})
 
@@ -67,6 +60,7 @@ class OllamaPrimingMessage(BaseModel):
     lang: Literal["en", "de"]
     content: str
 
+
 class Folders(BaseModel):
     old: str = Field(default="WORKED")
     cur: str = Field(default="WORKING")
@@ -79,24 +73,33 @@ class Redis(BaseModel):
     host_in_cluster: Optional[str] = Field(default=None)
     port: int = Field(default=6379)
 
+
 class Chromadb(BaseModel):
     host: str = Field(default=os.getenv("CHROMADB_HOST", "127.0.0.1"))
-    host_in_cluster: Optional[str] = Field(default=os.getenv("CHROMADB_HOST_CLUSTER", "chromadb.chromadb.svc.cluster.local"))
+    host_in_cluster: Optional[str] = Field(
+        default=os.getenv("CHROMADB_HOST_CLUSTER", "chromadb.chromadb.svc.cluster.local")
+    )
     port: int = Field(default=int(os.getenv("CHROMADB_PORT", "8000")))
     http_auth_user: Optional[str] = Field(default=None)
     http_auth_pass: Optional[str] = Field(default=None)
     default_collectionname: Optional[str] = Field(default=os.getenv("CHROMADB_DEFAULT_COLLECTIONNAME", "arley"))
-    ollama_embed_model: Optional[str] = Field(default=os.getenv("CHROMADB_OLLAMA_EMBED_MODEL", "nomic-embed-text:latest"))
+    ollama_embed_model: Optional[str] = Field(
+        default=os.getenv("CHROMADB_OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
+    )
+
 
 class Ollama(BaseModel):
     host: str = Field(default=os.getenv("OLLAMA_BASE_HOST", "127.0.0.1"))
     port: int = Field(default=int(os.getenv("OLLAMA_PORT", "11434")))
-    host_in_cluster: Optional[str] = Field(default=os.getenv("OLLAMA_BASE_HOST_CLUSTER", "ollama.ollama.svc.cluster.local"))
+    host_in_cluster: Optional[str] = Field(
+        default=os.getenv("OLLAMA_BASE_HOST_CLUSTER", "ollama.ollama.svc.cluster.local")
+    )
     ollama_model: str = Field(default="llama3.1:latest")
     ollama_embed_model: str = Field(default="nomic-embed-text:latest")
     ollama_function_calling_model: str = Field(default="llama3.1:latest")
     ollama_guess_language_model: str = Field(default="llama3.1:latest")
     ollama_priming_messages: list[OllamaPrimingMessage] = Field(default_factory=list)
+
 
 class Postgresql(BaseModel):
     host: str = Field(default="127.0.0.1")
@@ -121,6 +124,7 @@ class EmailSettings(BaseModel):
     folders: Folders
     alloweddomains: list[str]
 
+
 # TODO: HT20240912 -> make only_contracts-stuff obsolete by introducing the possibility to define lists of what to include
 class ArleyAug(BaseModel):
     template_version: str = Field(default="v2")
@@ -138,6 +142,7 @@ class ArleyAug(BaseModel):
     first_request_aug_only_contracts: bool = Field(default=True)
     first_request_aug_lang_filter: bool = Field(default=True)
 
+
 class Settings(BaseSettings):
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         populate_by_name=True,
@@ -151,7 +156,7 @@ class Settings(BaseSettings):
         #     validation_alias=to_camel,
         #     serialization_alias=to_pascal,
         # )
-        yaml_file=[_CONFIGPATH, _CONFIGLOCALPATH]
+        yaml_file=[_CONFIGPATH, _CONFIGLOCALPATH],
     )
 
     arley_aug: ArleyAug
@@ -174,8 +179,7 @@ class Settings(BaseSettings):
         return init_settings, env_settings, YamlConfigSettingsSource(settings_cls)
 
 
-
-def str2bool(v: str|bool) -> bool:
+def str2bool(v: str | bool) -> bool:
     if not v:
         return False
 
@@ -193,7 +197,6 @@ def is_in_cluster() -> bool:
     return False
 
 
-
 def log_settings() -> None:
     for k, v in os.environ.items():
         if k.startswith("PSQL_"):
@@ -201,15 +204,15 @@ def log_settings() -> None:
     logger.info(json.dumps(settings.model_dump(by_alias=True), indent=4, sort_keys=False, default=str))
 
 
-
 def get_ollama_options(
-        model: str,
-        top_k: int|None = 40,
-        top_p: float|None = 0.9,
-        temperature: float|None = 0.8,
-        seed: int|None = 0,
-        num_predict: int|None = -1,
-        repeat_penalty: float|None = 1.1) -> dict:
+    model: str,
+    top_k: int | None = 40,
+    top_p: float | None = 0.9,
+    temperature: float | None = 0.8,
+    seed: int | None = 0,
+    num_predict: int | None = -1,
+    repeat_penalty: float | None = 1.1,
+) -> dict:
 
     num_ctx: int = get_num_ctx_by_model_name(model_name=model)
 
@@ -289,6 +292,7 @@ def get_ollama_options(
 
     return options
 
+
 def get_num_ctx_by_model_name(model_name: str, default_num_ctx: int = 2048) -> int:
     # num_predict	Maximum number of tokens to predict when generating text. (Default: 128, -1 = infinite generation, -2 = fill context)	int	num_predict 42
     # top_k	Reduces the probability of generating nonsense. A higher value (e.g. 100) will give more diverse answers, while a lower value (e.g. 10) will be more conservative. (Default: 40)	int	top_k 40
@@ -310,7 +314,7 @@ def get_num_ctx_by_model_name(model_name: str, default_num_ctx: int = 2048) -> i
         case s if s.startswith("bespoke-minicheck"):
             num_ctx = 32 * 1024
         case s if s.startswith("reader-lm"):
-            num_ctx = 256*1024
+            num_ctx = 256 * 1024
             # num_ctx = 32 * 1024
         case "hermes3:70b-llama3.1-q4_0":
             num_ctx = 8_192
@@ -333,10 +337,9 @@ def get_num_ctx_by_model_name(model_name: str, default_num_ctx: int = 2048) -> i
         case s if s.startswith("llama3"):
             num_ctx = 8_192
         case s if s.startswith("gemma"):
-            num_ctx = 8_192  #4_096
+            num_ctx = 8_192  # 4_096
 
     return num_ctx
-
 
 
 settings: Settings = Settings()  # type: ignore
@@ -371,17 +374,33 @@ CHROMADB_DEFAULT_COLLECTION_NAME: str = os.getenv("CHROMADB_DEFAULT_COLLECTION_N
 ARLEY_AUG_UNIFIED: bool = str2bool(os.getenv("ARLEY_AUG_UNIFIED", settings.arley_aug.unified))
 ARLEY_AUG_PER_ITEM: bool = str2bool(os.getenv("ARLEY_AUG_PER_ITEM", settings.arley_aug.per_item))
 ARLEY_AUG_NUM_DOCS: int = int(os.getenv("ARLEY_AUG_NUM_DOCS", settings.arley_aug.num_docs))
-ARLEY_AUG_TEMPLATE_TYPE: TemplateType = TemplateType[os.getenv("ARLEY_AUG_TEMPLATE_TYPE", settings.arley_aug.template_type.value)]
+ARLEY_AUG_TEMPLATE_TYPE: TemplateType = TemplateType[
+    os.getenv("ARLEY_AUG_TEMPLATE_TYPE", settings.arley_aug.template_type.value)
+]
 ARLEY_AUG_ONLY_CONTRACTS: bool = str2bool(os.getenv("ARLEY_AUG_ONLY_CONTRACTS", settings.arley_aug.only_contracts))
 ARLEY_AUG_LANG_FILTER: bool = str2bool(os.getenv("ARLEY_AUG_LANG_FILTER", settings.arley_aug.lang_filter))
-ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG: bool = str2bool(os.getenv("ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG", settings.arley_aug.first_request_include_aug))
-ARLEY_AUG_FIRST_REQUEST_UNIFIED: bool = str2bool(os.getenv("ARLEY_AUG_FIRST_REQUEST_UNIFIED", settings.arley_aug.first_request_unified))
-ARLEY_AUG_FIRST_REQUEST_PER_ITEM: bool = str2bool(os.getenv("ARLEY_AUG_FIRST_REQUEST_PER_ITEM", settings.arley_aug.first_request_per_item))
-ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE: TemplateType = TemplateType[os.getenv("ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE", settings.arley_aug.first_request_template_type.value)]
-ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS: int = int(os.getenv("ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS", settings.arley_aug.first_request_n_aug_results))
-ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS: bool = str2bool(os.getenv("ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS", settings.arley_aug.first_request_aug_only_contracts))
-ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER: bool = str2bool(os.getenv("ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER", settings.arley_aug.first_request_aug_lang_filter))
-REFINELOG_RECIPIENTS: list[str]|None = None
+ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG: bool = str2bool(
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG", settings.arley_aug.first_request_include_aug)
+)
+ARLEY_AUG_FIRST_REQUEST_UNIFIED: bool = str2bool(
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_UNIFIED", settings.arley_aug.first_request_unified)
+)
+ARLEY_AUG_FIRST_REQUEST_PER_ITEM: bool = str2bool(
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_PER_ITEM", settings.arley_aug.first_request_per_item)
+)
+ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE: TemplateType = TemplateType[
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE", settings.arley_aug.first_request_template_type.value)
+]
+ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS: int = int(
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS", settings.arley_aug.first_request_n_aug_results)
+)
+ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS: bool = str2bool(
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS", settings.arley_aug.first_request_aug_only_contracts)
+)
+ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER: bool = str2bool(
+    os.getenv("ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER", settings.arley_aug.first_request_aug_lang_filter)
+)
+REFINELOG_RECIPIENTS: list[str] | None = None
 if os.getenv("REFINELOG_RECIPIENTS"):
     REFINELOG_RECIPIENTS = os.getenv("REFINELOG_RECIPIENTS").split(",")  # type: ignore
 
@@ -395,18 +414,20 @@ TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, "templates")
 TEMPLATEDIRPATH = Path(TEMPLATEDIRPATH, TEMPLATE_VERSION)
 
 
-#TODO HT 20250331 also put in settings-class and yaml
-ARLEY_IMAPLOOP_MAX_IDLE_LOOPS: int|None = None
+# TODO HT 20250331 also put in settings-class and yaml
+ARLEY_IMAPLOOP_MAX_IDLE_LOOPS: int | None = None
 if os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_LOOPS") is not None:
     ARLEY_IMAPLOOP_MAX_IDLE_LOOPS = int(os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_LOOPS"))  # type: ignore
 else:
     ARLEY_IMAPLOOP_MAX_IDLE_LOOPS = 20
 
-ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE: int = int(os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE", "5"))
+ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE: int = int(
+    os.getenv("ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE", "5")
+)
 ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP: int = int(os.getenv("ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP", "10"))
 ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP: int = int(os.getenv("ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP", "10"))
 
-ARLEY_OLLAMALOOP_MAX_LOOPS: int|None = None
+ARLEY_OLLAMALOOP_MAX_LOOPS: int | None = None
 if os.getenv("ARLEY_OLLAMALOOP_MAX_LOOPS") is not None:
     ARLEY_OLLAMALOOP_MAX_LOOPS = int(os.getenv("ARLEY_OLLAMALOOP_MAX_LOOPS"))  # type: ignore
 
@@ -419,4 +440,3 @@ logger.info(f"Effective templatedirpath: {TEMPLATEDIRPATH}")
 
 if __name__ == "__main__":
     log_settings()
-

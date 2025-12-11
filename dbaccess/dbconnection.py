@@ -1,25 +1,23 @@
-import sys
 import datetime
+import os
+import sys
 import traceback
 import uuid
 from contextlib import contextmanager
 from pprint import pprint
-from typing import List, Optional, Any, Self, Callable, Generator, Dict
+from typing import Any, Callable, Dict, Generator, List, Optional, Self
 
 import loguru
 import sqlalchemy
-from sqlalchemy import create_engine, event, text, exc, Engine, URL, Connection
+from loguru import logger
+from sqlalchemy import (URL, Column, Connection, Engine, ForeignKey, Integer,
+                        MetaData, String, Table, create_engine, event, exc,
+                        inspect, text)
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.pool import NullPool, QueuePool
 from sqlalchemy.sql import text
-import os
-
 # https://chartio.com/resources/tutorials/how-to-execute-raw-sql-in-sqlalchemy/
 from sqlalchemy.sql.elements import TextClause
-from sqlalchemy.dialects import postgresql
-from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey
-from sqlalchemy import inspect
-
-from loguru import logger
 
 import arley.config
 from arley.Helper import Singleton
@@ -74,7 +72,7 @@ class DBConnectionEngine(metaclass=Singleton):
             # max_overflow=0
             echo=True,
             # isolation_level="AUTOCOMMIT",
-            query_cache_size=0
+            query_cache_size=0,
         )
 
     @contextmanager
@@ -130,11 +128,11 @@ def get_exception_tb_as_string(exc: Exception) -> str:
 
     return tbs
 
+
 import loguru
-def eprint(
-        lm: loguru._logger.Logger,  # type: ignore
-        *args: Any,
-        **kwargs: Any) -> None:
+
+
+def eprint(lm: loguru._logger.Logger, *args: Any, **kwargs: Any) -> None:  # type: ignore
     if not lm:
         print(*args, file=sys.stderr, **kwargs)
     else:
@@ -146,10 +144,10 @@ class DBObjectInsertUpdateDeleteResult:
 
     def __init__(self) -> None:
         self.rowcount: Optional[int] = None
-        self.exception: Exception|None = None
+        self.exception: Exception | None = None
         super().__init__()
 
-    def from_result_set(self, rs: sqlalchemy.engine.cursor.CursorResult, ex: Exception|None = None) -> Optional[Self]:
+    def from_result_set(self, rs: sqlalchemy.engine.cursor.CursorResult, ex: Exception | None = None) -> Optional[Self]:
         if ex is not None:
             eprint(DBObjectInsertUpdateDeleteResult.logger, "Exception caught: ", ex)
             self.exception = ex
@@ -163,7 +161,7 @@ class DBObjectInsertUpdateDeleteResult:
     def exception_occured(self) -> bool:
         return self.exception is not None
 
-    def get_exception(self) -> Exception|None:
+    def get_exception(self) -> Exception | None:
         return self.exception
 
     def get_rows_affected(self) -> Optional[int]:
@@ -283,7 +281,6 @@ class MultiLineResSet:
         return ret
 
 
-
 def get_compiled_sql(sql: str, **bindparams: Any) -> str:
     """Compile a SQL text with ":variable" placeholders into a literal SQL string
     using the PostgreSQL dialect.
@@ -304,7 +301,6 @@ def get_compiled_sql(sql: str, **bindparams: Any) -> str:
     # return sql_stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     # print("Compiled-SQL-with-args: ", sql_filled.compile(dialect=conn.dialect, compile_kwargs={"literal_binds": True}))
 
-
     # Build a TextClause with bound parameters
     sql_stmt: TextClause = text(sql).bindparams(**bindparams)
 
@@ -317,9 +313,6 @@ def get_compiled_sql(sql: str, **bindparams: Any) -> str:
     return str(compiled)
 
 
-
-
-
 def exec_one_line(sqlstr: str, **kwargs: Any) -> Optional[dict]:
     sql: TextClause = text(sqlstr)
     conn: Connection
@@ -327,7 +320,7 @@ def exec_one_line(sqlstr: str, **kwargs: Any) -> Optional[dict]:
         rs: sqlalchemy.engine.cursor.Result = conn.execute(sql, **kwargs)
         keys: sqlalchemy.engine.result.RMKeyView = rs.keys()
         colnames: list = list(keys)
-        ret: dict|None = None
+        ret: dict | None = None
 
         while True:
             row = rs.fetchone()
@@ -353,7 +346,7 @@ def exec_multi_line(sqlstr: str, **kwargs: Any) -> Optional[MultiLineResSet]:
         rs: sqlalchemy.engine.cursor.Result = conn.execute(sql, **kwargs)
         keys: sqlalchemy.engine.result.RMKeyView = rs.keys()
         colnames: list = list(keys)
-        ret: MultiLineResSet|None = None
+        ret: MultiLineResSet | None = None
 
         while True:
             if ret is None:
@@ -381,7 +374,7 @@ def insertupdatedelete(sqlstr: str, **kwargs: Any) -> Optional[DBObjectInsertUpd
 
     conn: sqlalchemy.engine.base.Connection
     rs: sqlalchemy.engine.cursor.CursorResult | None = None
-    ex: Exception|None = None
+    ex: Exception | None = None
     with DBConnectionEngine.get_instance().connect() as conn:
         try:
             sql = text(sqlstr)
@@ -393,7 +386,7 @@ def insertupdatedelete(sqlstr: str, **kwargs: Any) -> Optional[DBObjectInsertUpd
             ex = exX
 
         assert rs
-        ret: DBObjectInsertUpdateDeleteResult|None = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
+        ret: DBObjectInsertUpdateDeleteResult | None = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
 
         return ret
 
@@ -405,4 +398,3 @@ def connect_test() -> None:
 if __name__ == "__main__":
     print(get_compiled_sql("select :x as v", x=5))
     connect_test()
-

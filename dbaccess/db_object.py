@@ -1,37 +1,26 @@
+import datetime
 import json
+import uuid
 from enum import StrEnum
 from io import StringIO
+from typing import Any, ClassVar, Dict, List, Optional, Self
 
 import pytz
-from sqlalchemy.ext.declarative import declarative_base
-
-from dbaccess.dbconnection import (
-    DBObjectInsertUpdateDeleteResult,
-    MultiLineResSet,
-    get_compiled_sql,
-    DBConnectionEngine,
-)
-
-import datetime
-import uuid
-from typing import Optional, List, Self, Any, Dict, ClassVar
-
 import sqlalchemy
-from sqlalchemy import text, CursorResult, Connection, MetaData
+from loguru import logger
+from sqlalchemy import (Connection, CursorResult, ForeignKey, MetaData, String,
+                        text)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.schema import Table
-from sqlalchemy import ForeignKey
-from sqlalchemy import String
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
 
-
+from dbaccess.dbconnection import (DBConnectionEngine,
+                                   DBObjectInsertUpdateDeleteResult,
+                                   MultiLineResSet, get_compiled_sql)
 
 # This object shall be any form of Object-Persistence-Baseclass trimmed for efficiency...
 # "Alternatively": https://realpython.com/python-sqlite-sqlalchemy/#working-with-sqlalchemy-and-python-objects
 
-from loguru import logger
 
 LOGME_VERBOSE: bool = True
 
@@ -52,6 +41,7 @@ LOGME_VERBOSE: bool = True
 # logger.debug(f"{_metadata=}")
 # logger.debug(f"{Emails.__table__=}")
 # logger.debug(f"{RawEmails.__table__=}")
+
 
 class ComplexEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> Any:
@@ -87,7 +77,7 @@ class DBObject:
     TIMEZONE: datetime.tzinfo = pytz.timezone("Europe/Berlin")  # may be overriden/changed before use...
 
     def __init__(self) -> None:
-        self.dbtablename: str|None = None
+        self.dbtablename: str | None = None
         self.dbcolnames: List[str] | None = None
 
     @staticmethod
@@ -95,8 +85,6 @@ class DBObject:
         if input is None or input.find("'") < 0:
             return input
         return input.replace("'", "''")  # double-quotation is psql-style - aight ?!
-
-
 
     def __repr__(self) -> str:
         return f"I am a {self.__class__.__qualname__}. ({self.__dir__()}"
@@ -123,7 +111,9 @@ class DBObject:
     #     return json.dumps(self, default=lambda o: o.__dict__,
     #                       sort_keys=True, indent=4)
 
-    def from_result_set_next_row(self, rs: sqlalchemy.engine.cursor.Result, colnames: List|None = None) -> Self|None:
+    def from_result_set_next_row(
+        self, rs: sqlalchemy.engine.cursor.Result, colnames: List | None = None
+    ) -> Self | None:
         """
         Returns the object with the attributes set to the "contents" of the ResultSet
             Parameters:
@@ -163,7 +153,7 @@ class DBObject:
 
         return self
 
-    def save(self) -> DBObjectInsertUpdateDeleteResult|None:
+    def save(self) -> DBObjectInsertUpdateDeleteResult | None:
         savesql: StringIO = StringIO()
         savesql.write(f"update {self.dbtablename} set ")
 
@@ -185,10 +175,7 @@ class DBObject:
         if LOGME_VERBOSE:
             self.logger.debug(f"{savesql.getvalue()=} {cndict=}")
 
-        result: DBObjectInsertUpdateDeleteResult|None = self.insertupdatedelete(
-            savesql.getvalue(),
-            **cndict
-        )
+        result: DBObjectInsertUpdateDeleteResult | None = self.insertupdatedelete(savesql.getvalue(), **cndict)
 
         return result
 
@@ -215,7 +202,7 @@ class DBObject:
                 # raise exX
 
             assert rs
-            ret: DBObjectInsertUpdateDeleteResult|None = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
+            ret: DBObjectInsertUpdateDeleteResult | None = DBObjectInsertUpdateDeleteResult().from_result_set(rs, ex)
 
             return ret
 
@@ -237,7 +224,7 @@ class DBObject:
         keys: sqlalchemy.engine.result.RMKeyView = rs.keys()
 
         while True:
-            row: Self|None = cls().from_result_set_next_row(rs, list(keys))
+            row: Self | None = cls().from_result_set_next_row(rs, list(keys))
             if row is None:
                 break
 
@@ -253,7 +240,7 @@ class DBObject:
             return cls.get_result_set_to_list(rs)
 
     @classmethod
-    def get_one_from_sql(cls, sqlstr: str, **kwargs: Any) -> Self|None:
+    def get_one_from_sql(cls, sqlstr: str, **kwargs: Any) -> Self | None:
         # cls.logger.debug(f"{cls.__name__=}")
 
         conn: Connection
@@ -311,7 +298,7 @@ class DBObject:
         if LOGME_VERBOSE:
             self.logger.debug(f"{savesql=} {vhash=}")
 
-        result: DBObjectInsertUpdateDeleteResult|None = self.insertupdatedelete(savesql, **vhash)
+        result: DBObjectInsertUpdateDeleteResult | None = self.insertupdatedelete(savesql, **vhash)
 
         # traceback.print_tb(result.getException())
         # print("Result.exceptionOccured: ", result.exceptionOccured())

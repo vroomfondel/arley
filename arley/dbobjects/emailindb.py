@@ -9,28 +9,29 @@ from email import utils
 from email.headerregistry import Address
 from enum import StrEnum, auto
 from io import StringIO
-from typing import List, Optional, Callable, Self, Literal, get_args, ClassVar
+from typing import Callable, ClassVar, List, Literal, Optional, Self, get_args
 from uuid import UUID
 
 import pytz
 import sqlalchemy
-from sqlalchemy import DateTime, func, Boolean, Enum, MetaData, text
-from sqlalchemy.orm import Mapped, mapped_column, Session
-
+from loguru import logger
+from sqlalchemy import Boolean, DateTime, Enum, MetaData, func, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, Session, mapped_column
+
+import dbaccess.dbconnection
+from arley import Helper
+from arley.config import is_in_cluster, settings
+from arley.emailinterface.myemailmessage import MyEmailMessage
+from dbaccess.db_object import DBObject, DBObjectNEW
+from dbaccess.dbconnection import (DBConnectionEngine,
+                                   DBObjectInsertUpdateDeleteResult)
 
 # from sqlalchemy import Dialect, VARCHAR, String, Executable
 # from sqlalchemy.sql.type_api import TypeEngine, _T
 
-import dbaccess.dbconnection
-from arley import Helper
-from arley.config import settings, is_in_cluster
-from arley.emailinterface.myemailmessage import MyEmailMessage
-from dbaccess.db_object import DBObject, DBObjectNEW
 
-from loguru import logger
 
-from dbaccess.dbconnection import DBObjectInsertUpdateDeleteResult, DBConnectionEngine
 
 TIMEZONE: datetime.tzinfo = pytz.timezone(settings.timezone)
 
@@ -93,10 +94,9 @@ class Result(StrEnum):
     #     return self.name
 
 
+import sqlalchemy.engine.default
 # from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.dialects import postgresql
-
-import sqlalchemy.engine.default
 
 fart = sqlalchemy.engine.default.DefaultExecutionContext.get_result_processor
 
@@ -264,31 +264,25 @@ class ArleyEmailInDBNEW(DBObjectNEW):
 
     emailid: Mapped[UUID] = mapped_column(primary_key=True)
     received: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    processed: Mapped[bool] = mapped_column(Boolean, server_default='t', default=False)
+    processed: Mapped[bool] = mapped_column(Boolean, server_default="t", default=False)
     processresult: Mapped[Result] = mapped_column(
-        Enum(
-            Result,
-            create_constraint=True,
-            validate_strings=True,
-            name="result"
-        ),
+        Enum(Result, create_constraint=True, validate_strings=True, name="result"),
         server_default=text("'undefined'::result"),
-        default=Result.undefined.value
+        default=Result.undefined.value,
     )
     rootemailid: Mapped[UUID] = mapped_column(sqlalchemy.UUID)
-    isrootemailid: Mapped[bool] = mapped_column(Boolean, server_default='t', default=False)
+    isrootemailid: Mapped[bool] = mapped_column(Boolean, server_default="t", default=False)
     frommail: Mapped[str] = mapped_column(sqlalchemy.String(255))
     tomail: Mapped[str] = mapped_column(sqlalchemy.String(255))
-    toarley: Mapped[bool] = mapped_column(Boolean, server_default='t', default=False)
-    fromarley: Mapped[bool] = mapped_column(Boolean, server_default='t', default=False)
+    toarley: Mapped[bool] = mapped_column(Boolean, server_default="t", default=False)
+    fromarley: Mapped[bool] = mapped_column(Boolean, server_default="t", default=False)
     sequencenumber: Mapped[int] = mapped_column(sqlalchemy.Integer, server_default="0", default=0, nullable=False)
     envelopeemailid: Mapped[str] = mapped_column(sqlalchemy.String(255))
     subject: Mapped[str] = mapped_column(sqlalchemy.Text)
     mailbody: Mapped[str] = mapped_column(sqlalchemy.Text)
     ollamaresponse: Mapped[dict] = mapped_column(JSONB)
-    lang: Mapped[Literal['de', 'en']] = mapped_column(sqlalchemy.CHAR(2), default="de", server_default="de")
+    lang: Mapped[Literal["de", "en"]] = mapped_column(sqlalchemy.CHAR(2), default="de", server_default="de")
     ollamamsgs: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
-
 
     def sanitize_header_fields(self) -> None:
         if self.envelopeemailid:
@@ -304,14 +298,20 @@ class ArleyEmailInDBNEW(DBObjectNEW):
             self.subject = self.subject.replace("\n", "").replace("\r", "")
 
     @classmethod
-    def insert_from_myemail(cls, myemail: MyEmailMessage, rootemailid: UUID | None = None, arley_email: str = settings.emailsettings.mailaddress, lang: Literal['de', 'en'] = "de") -> "ArleyEmailInDBNEW | None":
+    def insert_from_myemail(
+        cls,
+        myemail: MyEmailMessage,
+        rootemailid: UUID | None = None,
+        arley_email: str = settings.emailsettings.mailaddress,
+        lang: Literal["de", "en"] = "de",
+    ) -> "ArleyEmailInDBNEW | None":
         # TODO HT 20240920 REWRITE TO SQLALCHEMY LOGIC!!!
 
         sequencenumber: int = 0
         if rootemailid is not None:
             sql: str = f"select count(*) as countme from emails where rootemailid='{rootemailid}'"
             cls.logger.debug(f"{sql=}")
-            rs: dict|None = dbaccess.dbconnection.exec_one_line(sql)
+            rs: dict | None = dbaccess.dbconnection.exec_one_line(sql)
             cls.logger.debug(rs)
             if rs is not None:
                 sequencenumber = rs["countme"]
@@ -322,13 +322,12 @@ class ArleyEmailInDBNEW(DBObjectNEW):
         aeid.processed = False
         aeid.processresult = Result.pending
 
-        received: datetime.datetime|None = myemail.get_date_from_last_received_header()
+        received: datetime.datetime | None = myemail.get_date_from_last_received_header()
         if received is None:
             received = myemail.get_date_from_date_header()
 
         if received is not None:
             aeid.received = received
-
 
         if not aeid.received:
             aeid.received = datetime.datetime.now(tz=DBObject.TIMEZONE)
@@ -344,11 +343,13 @@ class ArleyEmailInDBNEW(DBObjectNEW):
         cls.logger.debug(f"{aeid.toarley=} {aeid.tomail=} == {arley_email=}")
         aeid.fromarley = aeid.frommail == arley_email
 
-        aeid.sequencenumber = sequencenumber+1 if rootemailid else 0
+        aeid.sequencenumber = sequencenumber + 1 if rootemailid else 0
 
-        aeid.envelopeemailid = myemail.envelope_message_id.strip()  #utils.make_msgid(domain=Address(addr_spec=aeid.frommail).domain)
+        aeid.envelopeemailid = (
+            myemail.envelope_message_id.strip()
+        )  # utils.make_msgid(domain=Address(addr_spec=aeid.frommail).domain)
 
-        mb: str|None = myemail.get_latest_reply()
+        mb: str | None = myemail.get_latest_reply()
         if mb is not None:
             aeid.mailbody = mb
         aeid.ollamamsgs = {}
@@ -363,7 +364,7 @@ class ArleyEmailInDBNEW(DBObjectNEW):
                 logger.debug(f"{type(res)=}\t{res=} {res.exception_occured()=} {res.get_rows_affected()=}")
 
             if res is not None and res.exception_occured():
-                exme: Exception|None = res.get_exception()
+                exme: Exception | None = res.get_exception()
                 if exme is not None:
                     logger.error(Helper.get_exception_tb_as_string(exme))
                 return None
@@ -373,7 +374,6 @@ class ArleyEmailInDBNEW(DBObjectNEW):
             # logger.debug(Helper.get_pretty_dict_json_no_sort(rs.repr_json()))
 
         return aeid
-
 
 
 class ArleyEmailInDB(DBObject):
@@ -396,7 +396,7 @@ class ArleyEmailInDB(DBObject):
         "mailbody",
         "ollamaresponse",
         "lang",
-        "ollamamsgs"
+        "ollamamsgs",
     ]  # all lowercase - otherwise will need to quote!!!
 
     def __init__(self) -> None:
@@ -416,7 +416,7 @@ class ArleyEmailInDB(DBObject):
         self.mailbody: Optional[str] = None
         self.ollamaresponse: Optional[dict] = None
         self.ollamamsgs: Optional[list] = None
-        self.lang: Optional[Literal['de', 'en']] = None
+        self.lang: Optional[Literal["de", "en"]] = None
 
         self.sanitize_header_fields()
 
@@ -436,12 +436,18 @@ class ArleyEmailInDB(DBObject):
             self.subject = self.subject.replace("\n", "").replace("\r", "")
 
     @classmethod
-    def insert_from_myemail(cls, myemail: MyEmailMessage, rootemailid: UUID | None = None, arley_email: str = settings.emailsettings.mailaddress, lang: Literal['de', 'en'] = "de") -> "ArleyEmailInDB | None":
+    def insert_from_myemail(
+        cls,
+        myemail: MyEmailMessage,
+        rootemailid: UUID | None = None,
+        arley_email: str = settings.emailsettings.mailaddress,
+        lang: Literal["de", "en"] = "de",
+    ) -> "ArleyEmailInDB | None":
         sequencenumber: int = 0
         if rootemailid is not None:
             sql: str = f"select count(*) as countme from emails where rootemailid='{rootemailid}'"
             cls.logger.debug(f"{sql=}")
-            rs: dict|None = dbaccess.dbconnection.exec_one_line(sql)
+            rs: dict | None = dbaccess.dbconnection.exec_one_line(sql)
             cls.logger.debug(rs)
             if rs is not None:
                 sequencenumber = rs["countme"]
@@ -470,9 +476,11 @@ class ArleyEmailInDB(DBObject):
         cls.logger.debug(f"{aeid.toarley=} {aeid.tomail=} == {arley_email=}")
         aeid.fromarley = aeid.frommail == arley_email
 
-        aeid.sequencenumber = sequencenumber+1 if rootemailid else 0
+        aeid.sequencenumber = sequencenumber + 1 if rootemailid else 0
 
-        aeid.envelopeemailid = myemail.envelope_message_id.strip()  #utils.make_msgid(domain=Address(addr_spec=aeid.frommail).domain)
+        aeid.envelopeemailid = (
+            myemail.envelope_message_id.strip()
+        )  # utils.make_msgid(domain=Address(addr_spec=aeid.frommail).domain)
 
         aeid.mailbody = myemail.get_latest_reply()
         aeid.ollamamsgs = list()
@@ -495,8 +503,6 @@ class ArleyEmailInDB(DBObject):
         return aeid
 
 
-
-
 # arley=# create table rawemails (emailid UUID not null, rawemail text, textmailbody text, primary key(emailid));
 #
 # arley=# \d rawemails
@@ -513,11 +519,7 @@ class ArleyEmailInDB(DBObject):
 class ArleyRawEmailInDB(DBObject):
     logger = logger.bind(classname=__qualname__)
     dbtablename: str = "rawemails"
-    dbcolnames: List[str] = [
-        "emailid",
-        "rawemail",
-        "textmailbody"
-    ]  # all lowercase - otherwise will need to quote!!!
+    dbcolnames: List[str] = ["emailid", "rawemail", "textmailbody"]  # all lowercase - otherwise will need to quote!!!
 
     def __init__(self) -> None:
         self.emailid: Optional[UUID] = None
@@ -527,7 +529,9 @@ class ArleyRawEmailInDB(DBObject):
         super().__init__()
 
     @classmethod
-    def insert_rawemail_from_myemail(cls, myemail: MyEmailMessage, arleyemailindb: ArleyEmailInDB) -> "ArleyRawEmailInDB | None":
+    def insert_rawemail_from_myemail(
+        cls, myemail: MyEmailMessage, arleyemailindb: ArleyEmailInDB
+    ) -> "ArleyRawEmailInDB | None":
         aeid: ArleyRawEmailInDB = ArleyRawEmailInDB()
         aeid.emailid = arleyemailindb.emailid
         aeid.rawemail = myemail.email_message.as_string()
@@ -565,19 +569,16 @@ class ArleyRawEmailInDB(DBObject):
 # sqlalchemy.dialects.postgresql.named_types.ENUM
 
 
-
-
-
 def run_new() -> None:
     dburl: str = sqlalchemy.engine.url.URL.create(
-                drivername="postgresql+psycopg2",
-                username=settings.postgresql.username,
-                password=settings.postgresql.password,
-                database=settings.postgresql.dbname,
-                host=settings.postgresql.host_in_cluster if is_in_cluster() else settings.postgresql.host,
-                port=settings.postgresql.port,
-                # query={"host": unix_socket_path},  # if going via socket.
-            ).render_as_string()
+        drivername="postgresql+psycopg2",
+        username=settings.postgresql.username,
+        password=settings.postgresql.password,
+        database=settings.postgresql.dbname,
+        host=settings.postgresql.host_in_cluster if is_in_cluster() else settings.postgresql.host,
+        port=settings.postgresql.port,
+        # query={"host": unix_socket_path},  # if going via socket.
+    ).render_as_string()
     os.environ["PSQL_DB_URL"] = dburl
 
     # DBObjectNEW.metadata.reflect(bind=DBConnectionEngine.get_instance().get_engine(autocommit=False))
@@ -632,4 +633,3 @@ if __name__ == "__main__":
     run_new()
 
     exit(0)
-

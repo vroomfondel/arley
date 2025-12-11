@@ -1,24 +1,24 @@
 import abc
 import enum
 import sys
+from typing import Any, Literal, Type, Union
 
-from ollama._types import Tool, Message
+from loguru import logger
+from ollama._types import Message, Tool
 
+from arley import Helper
 from arley.Helper import Singleton
+
 # from arley.config import settings
 
 
-from typing import Literal, Any, Union, Type
 
 # from abc import ABC, abstractmethod
 
-from arley import Helper
 
-from loguru import logger
 
 # disable loguru for this module
 logger.disable(__name__)  # "arley.llm.ollama_tools")
-
 
 
 # heavily inspired by https://github.com/technovangelist/videoprojects/blob/main/2024-07-10-functioncalling-with-tools/tools.ts
@@ -441,24 +441,19 @@ FUNCTION_SCHEMA: dict = {
 #
 
 
-class GetUrl(OllamaCallableTool):
-    ...
+class GetUrl(OllamaCallableTool): ...
 
 
 def _ollama_test_llama31_with_tools() -> None:
-    from arley.llm.ollama_adapter import _get_fc_call_generate_priming_history
-
     # https://github.com/ollama/ollama-python/blob/main/examples/tools/main.py
     # TODO HT 20250324 update to conform to: https://github.com/ollama/ollama-python/blob/main/examples/tools.py
-
-    from arley.llm.ollama_adapter import ask_ollama_chat
+    from arley.llm.ollama_adapter import (
+        _get_fc_call_generate_priming_history, ask_ollama_chat)
 
     fc_questions: dict = {}
     # just recycling the priming questions...
     msgs: list[Message] = _get_fc_call_generate_priming_history(
-        function_schema=FUNCTION_SCHEMA,
-        toolstring=TOOLSSTRING,
-        allow_backticked_json=False
+        function_schema=FUNCTION_SCHEMA, toolstring=TOOLSSTRING, allow_backticked_json=False
     )
     for i in range(1, len(msgs), 2):
         msg: Message = msgs[i]
@@ -474,7 +469,7 @@ def _ollama_test_llama31_with_tools() -> None:
             system_prompt=None,
             prompt=fctest_question,
             msg_history=None,
-            model="llama3.1:latest", # "llama3.1:70b-instruct-q4_0",  # "llama3.1:latest", "llama3.1:70b-instruct-q3_K_M"
+            model="llama3.1:latest",  # "llama3.1:70b-instruct-q4_0",  # "llama3.1:latest", "llama3.1:70b-instruct-q3_K_M"
             evict=False,
             temperature=0.0,
             # penalize_newline=True,
@@ -489,7 +484,7 @@ def _ollama_test_llama31_with_tools() -> None:
             tools=TOOLSLIST_OLLAMA_TOOL_STYLE,
             print_chunks_when_streamed=False,
             streamed_print_to_io=sys.stdout,
-            streamed=False
+            streamed=False,
         )
 
         if "tool_calls" in resp2["message"]:
@@ -498,6 +493,7 @@ def _ollama_test_llama31_with_tools() -> None:
                 function: Message.ToolCall.Function = tc["function"]  # was: ToolCallFunction
                 # ingore
                 ToolBox.get_instance().execute_tool_function(function["name"], function["arguments"])
+
 
 # function calling in hermes3: https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B
 

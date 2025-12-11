@@ -1,22 +1,19 @@
-
 # os.environ["OLLAMA_BASE_URL"] = "http://127.0.0.1:11434"
 
 
 import json
-
 from pathlib import Path
-
-from arley.llm.ollama_adapter import ask_ollama_chat
 
 from loguru import logger
 
+from arley.llm.ollama_adapter import ask_ollama_chat
 
 
 def main(fp: Path, ollama_model: str = "reader-lm:latest", fout: bool = False, skip_if_fout_exists: bool = True) -> str:
     assert fp.exists() and fp.is_file()
 
     fno: str = fp.name
-    fno = fno[0:fno.rfind(".")] + "_readerlm.md"
+    fno = fno[0 : fno.rfind(".")] + "_readerlm.md"
 
     fw: Path = Path(fp.parent.resolve(), fno)
 
@@ -48,7 +45,7 @@ def main(fp: Path, ollama_model: str = "reader-lm:latest", fout: bool = False, s
         print_response=False,
         print_chunks_when_streamed=False,
         print_options=True,
-        print_msgs=False
+        print_msgs=False,
     )
 
     logger.debug(json.dumps(resp, indent=4, default=str, sort_keys=False))

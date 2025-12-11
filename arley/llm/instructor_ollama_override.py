@@ -1,29 +1,24 @@
+import json
 import os
 import sys
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional
 
 import httpx
-import json
-
+import instructor
 from httpx import ByteStream
 from openai import OpenAI
 
-import instructor
-
 _HOST: str = "http://127.0.0.1:11434"
 _OLLAMA_MODEL: str = "hermes3:8b-llama3.1-fp16"
-_OLLAMA_OPTIONS: dict = {
-    "num_gpu": -1,
-    "num_ctx": 65_536,
-    "num_predict": -1
-}
+_OLLAMA_OPTIONS: dict = {"num_gpu": -1, "num_ctx": 65_536, "num_predict": -1}
 
-_OLLAMA_FORMAT_REQUEST: Literal['json']|None = None
+_OLLAMA_FORMAT_REQUEST: Literal["json"] | None = None
 
 try:
-    import arley.config as config
     from loguru import logger
+
+    import arley.config as config
 
     _HOST = config.OLLAMA_HOST
     _OLLAMA_MODEL = config.settings.ollama.ollama_model
@@ -32,9 +27,12 @@ except ImportError as ie:
     print(f"IMPORT FAIL :: {ie=}", file=sys.stderr)
 
     from loguru import logger
+
     os.environ["LOGURU_LEVEL"] = os.getenv("LOGURU_LEVEL", "DEBUG")  # standard is DEBUG
     logger.remove()  # remove default-handler
-    logger_fmt: str = "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
+    logger_fmt: str = (
+        "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
+    )
 
     logger.add(sys.stderr, level=os.getenv("LOGURU_LEVEL"), format=logger_fmt)  # type: ignore # TRACE | DEBUG | INFO | WARN | ERROR |  FATAL
     logger.configure(extra={"classname": "None"})
@@ -48,27 +46,39 @@ logger.debug(f"{_OLLAMA_OPTIONS=}")
 
 # https://gist.github.com/vroomfondel/eb1fb4ac3319b22f9dc3d9ff658ce0c9
 
+
 class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
     logger = logger.bind(classname=__qualname__)
 
-    def __init__(self, host: str, options: dict, print_request: bool, print_response: bool, print_http_request: bool, print_http_response: bool, think_flag: bool|None = None):
+    def __init__(
+        self,
+        host: str,
+        options: dict,
+        print_request: bool,
+        print_response: bool,
+        print_http_request: bool,
+        print_http_response: bool,
+        think_flag: bool | None = None,
+    ):
         self.host = host
         self.options = options
         self.print_request = print_request
         self.print_response = print_response
-        self.print_http_request = print_http_request,
+        self.print_http_request = (print_http_request,)
         self.print_http_response = print_http_response
         self.think_flag = think_flag
 
     @classmethod
-    def get_instructor_client(cls,
-                              host: str=_HOST,
-                              options: Optional[dict] = None,
-                              print_request: bool = False,
-                              print_response: bool = False,
-                              print_http_request: bool = False,
-                              print_http_response: bool = False,
-                              think_flag: bool|None = None) -> instructor.Instructor:
+    def get_instructor_client(
+        cls,
+        host: str = _HOST,
+        options: Optional[dict] = None,
+        print_request: bool = False,
+        print_response: bool = False,
+        print_http_request: bool = False,
+        print_http_response: bool = False,
+        think_flag: bool | None = None,
+    ) -> instructor.Instructor:
         if options is None:
             options = _OLLAMA_OPTIONS
 
@@ -79,19 +89,19 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             print_response=print_response,
             print_http_request=print_http_request,
             print_http_response=print_http_response,
-            think_flag=think_flag
+            think_flag=think_flag,
         )
 
         meclient = httpx.Client(
             event_hooks={
-                'request': [
+                "request": [
                     # partial(cls.modify_request, host = host, options = options)
                     ioao.modify_request
                 ],
-                'response': [
+                "response": [
                     # partial(cls.modify_respone, host = host, options = options)
                     ioao.modify_response
-                ]
+                ],
             }
         )
 
@@ -101,7 +111,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
                 base_url=f"{host}/BLARGHNOTEXISTFAILCHECK",
                 api_key="ollama",  # required, but unused
             ),
-            mode=instructor.Mode.JSON
+            mode=instructor.Mode.JSON,
         )
 
         return client
@@ -144,9 +154,7 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
             files=None,
             json=post_content_new,
             boundary=httpx._models.get_multipart_boundary_from_content_type(
-                content_type=content_type.encode(request.headers.encoding)
-                if content_type
-                else None
+                content_type=content_type.encode(request.headers.encoding) if content_type else None
             ),
         )
 
@@ -167,7 +175,9 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
         # traceback.print_stack()
 
         if self.print_request:
-            logger.debug(f"REQ_CONTENT_NEW_PARSED: {json.dumps(post_content_new, indent=2, sort_keys=False, default=str)}")
+            logger.debug(
+                f"REQ_CONTENT_NEW_PARSED: {json.dumps(post_content_new, indent=2, sort_keys=False, default=str)}"
+            )
 
         if self.print_http_request:
             logger.debug(f"REQ_OLD {type(request.url)=} {request.url=}")
@@ -181,7 +191,9 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
         resp_content: dict = json.loads(response.content)
 
         if self.print_response:
-            logger.debug(f"RESPONSE_CONTENT BEFORE:\n{json.dumps(resp_content, indent=2, sort_keys=False, default=str)}")
+            logger.debug(
+                f"RESPONSE_CONTENT BEFORE:\n{json.dumps(resp_content, indent=2, sort_keys=False, default=str)}"
+            )
 
         uni: int = int(datetime.fromisoformat(resp_content["created_at"]).timestamp())
         mimic_openai: dict = {
@@ -213,7 +225,9 @@ class InstructorOpenAIOllamaOverride:  # metaclass=Singleton):
         response._content = json.dumps(mimic_openai).encode()
 
         if self.print_response:
-            logger.debug(f"RESPONSE_CONTENT MODIFIED:\n{json.dumps(mimic_openai, indent=2, sort_keys=False, default=str)}")
+            logger.debug(
+                f"RESPONSE_CONTENT MODIFIED:\n{json.dumps(mimic_openai, indent=2, sort_keys=False, default=str)}"
+            )
 
 
 def main() -> None:
@@ -223,7 +237,9 @@ def main() -> None:
         name: str
         age: int
 
-    instructor_client = InstructorOpenAIOllamaOverride.get_instructor_client(host=_HOST, options=_OLLAMA_OPTIONS, think_flag=True, print_request=True, print_response=True)
+    instructor_client = InstructorOpenAIOllamaOverride.get_instructor_client(
+        host=_HOST, options=_OLLAMA_OPTIONS, think_flag=True, print_request=True, print_response=True
+    )
 
     resp, comp = instructor_client.create_with_completion(
         stream=False,

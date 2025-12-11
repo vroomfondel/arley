@@ -1,67 +1,51 @@
+import datetime
 import difflib
+import json
+import os
 import sys
 import textwrap
-
-import json
 import time
 import uuid
 from email import utils
 from email.headerregistry import Address
-from typing import Literal, Optional, Tuple, TextIO, Mapping, Any, Iterator
-
-from time import perf_counter
-
-
-import chromadb
-from imapclient.response_types import Envelope
-
-from arley import Helper
-from arley.config import (settings,
-                          OllamaPrimingMessage,
-                          TemplateType,
-                          OLLAMA_MODEL,
-                          OLLAMA_FUNCTION_CALLING_MODEL,
-                          OLLAMA_GUESS_LANGUAGE_MODEL,
-                          CHROMADB_DEFAULT_COLLECTION_NAME,
-                          ARLEY_AUG_UNIFIED,
-                          ARLEY_AUG_PER_ITEM,
-                          ARLEY_AUG_NUM_DOCS,
-                          ARLEY_AUG_TEMPLATE_TYPE,
-                          ARLEY_AUG_ONLY_CONTRACTS,
-                          ARLEY_AUG_LANG_FILTER,
-                          ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
-                          ARLEY_AUG_FIRST_REQUEST_UNIFIED,
-                          ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
-                          ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
-                          ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
-                          ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
-                          ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
-                          REFINELOG_RECIPIENTS, OLLAMA_HOST, get_ollama_options)
-
-import datetime
-import os
 from io import StringIO
 from pathlib import Path
+from time import perf_counter
+from typing import Any, Iterator, Literal, Mapping, Optional, TextIO, Tuple
 
+import chromadb
 import pytz
-from jinja2 import Template, Environment, BaseLoader, FileSystemLoader
-
+from chromadb.api.models.Collection import Collection as ChromaCollection
+from imapclient.response_types import Envelope
+from jinja2 import BaseLoader, Environment, FileSystemLoader, Template
 from reputils import MailReport
 
+from arley import Helper
+from arley.config import (ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
+                          ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
+                          ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
+                          ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
+                          ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
+                          ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
+                          ARLEY_AUG_FIRST_REQUEST_UNIFIED,
+                          ARLEY_AUG_LANG_FILTER, ARLEY_AUG_NUM_DOCS,
+                          ARLEY_AUG_ONLY_CONTRACTS, ARLEY_AUG_PER_ITEM,
+                          ARLEY_AUG_TEMPLATE_TYPE, ARLEY_AUG_UNIFIED,
+                          CHROMADB_DEFAULT_COLLECTION_NAME,
+                          OLLAMA_FUNCTION_CALLING_MODEL,
+                          OLLAMA_GUESS_LANGUAGE_MODEL, OLLAMA_HOST,
+                          OLLAMA_MODEL, REFINELOG_RECIPIENTS,
+                          OllamaPrimingMessage, TemplateType,
+                          get_ollama_options, settings)
 from arley.dbobjects.emailindb import ArleyEmailInDB, ArleyRawEmailInDB, Result
 from arley.emailinterface.imapadapter import IMAPAdapter
 from arley.emailinterface.myemailmessage import MyEmailMessage
 from arley.llm.language_guesser import LanguageGuesser
-
 from arley.llm.ollama_adapter import Message, ask_ollama_chat
-
-
 from arley.llm.ollama_chromadb_rag import OllamaChromaDBRAG
 from arley.vectorstore.chroma_adapter import ChromaDBConnection
 from dbaccess.db_object import DBObject
 from dbaccess.dbconnection import DBObjectInsertUpdateDeleteResult
-
-from chromadb.api.models.Collection import Collection as ChromaCollection
 
 _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 
@@ -86,34 +70,35 @@ class OllamaEmailReply:
         self.mailindb = mailindb
 
     @classmethod
-    def generate_response_from_ollama(cls,
-                          is_initial_request: bool,
-                          msgs: list[Message],
-                          initial_topic: str,
-                          prompt: str,
-                          # existing_response: str,
-                          lang: Literal["en", "de"],
-                          primer: list[Message],
-                          ollama_model: str = OLLAMA_MODEL,
-                          streamed: bool=False,
-                          temperature: float=0.1,
-                          n_aug_results: int = ARLEY_AUG_NUM_DOCS,
-                          template_type: TemplateType = ARLEY_AUG_TEMPLATE_TYPE,
-                          unified_aug: bool = ARLEY_AUG_UNIFIED,
-                          refine_per_item: bool = ARLEY_AUG_PER_ITEM,
-                          aug_only_contracts: bool = ARLEY_AUG_ONLY_CONTRACTS,
-                          aug_lang_filter: bool = ARLEY_AUG_LANG_FILTER,
-                          first_request_unified: bool=ARLEY_AUG_FIRST_REQUEST_UNIFIED,
-                          first_request_per_item: bool=ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
-                          first_request_aug_lang_filter: bool=ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
-                          first_request_include_aug: bool=ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
-                          first_request_template_type: TemplateType=ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
-                          first_request_n_aug_results: int=ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
-                          first_request_aug_only_contracts: bool=ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
-
-                          print_msgs: bool = True,
-                          print_responses: bool = True,
-                          refinelog: StringIO|TextIO|None = None) -> Tuple[str, dict]:
+    def generate_response_from_ollama(
+        cls,
+        is_initial_request: bool,
+        msgs: list[Message],
+        initial_topic: str,
+        prompt: str,
+        # existing_response: str,
+        lang: Literal["en", "de"],
+        primer: list[Message],
+        ollama_model: str = OLLAMA_MODEL,
+        streamed: bool = False,
+        temperature: float = 0.1,
+        n_aug_results: int = ARLEY_AUG_NUM_DOCS,
+        template_type: TemplateType = ARLEY_AUG_TEMPLATE_TYPE,
+        unified_aug: bool = ARLEY_AUG_UNIFIED,
+        refine_per_item: bool = ARLEY_AUG_PER_ITEM,
+        aug_only_contracts: bool = ARLEY_AUG_ONLY_CONTRACTS,
+        aug_lang_filter: bool = ARLEY_AUG_LANG_FILTER,
+        first_request_unified: bool = ARLEY_AUG_FIRST_REQUEST_UNIFIED,
+        first_request_per_item: bool = ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
+        first_request_aug_lang_filter: bool = ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
+        first_request_include_aug: bool = ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
+        first_request_template_type: TemplateType = ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
+        first_request_n_aug_results: int = ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
+        first_request_aug_only_contracts: bool = ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
+        print_msgs: bool = True,
+        print_responses: bool = True,
+        refinelog: StringIO | TextIO | None = None,
+    ) -> Tuple[str, dict]:
 
         logger = cls.logger
 
@@ -124,12 +109,12 @@ class OllamaEmailReply:
         cdbcollection: ChromaCollection = cdbconnection.get_or_create_collection(CHROMADB_DEFAULT_COLLECTION_NAME)
 
         rag: OllamaChromaDBRAG = OllamaChromaDBRAG(cdbcollection=cdbcollection)
-        
+
         if is_initial_request and first_request_include_aug:
             # first request
             first_prompt_refines: list[Tuple[str, str]] = rag.get_refine_contexts(
                 prompt=prompt,
-                lang=lang, # type: ignore
+                lang=lang,  # type: ignore
                 n_aug_results=first_request_n_aug_results,
                 template_type=first_request_template_type,
                 refine_per_item=first_request_per_item,
@@ -137,7 +122,7 @@ class OllamaEmailReply:
                 aug_only_contracts=first_request_aug_only_contracts,
                 aug_lang_filter=first_request_aug_lang_filter,
                 is_initial_aug_request=True,
-                refinelog=refinelog
+                refinelog=refinelog,
             )
 
             logger.debug(f"{len(first_prompt_refines)=}")
@@ -154,20 +139,23 @@ class OllamaEmailReply:
                     lang=lang,  # type: ignore
                     template_type=first_request_template_type,
                     ollama_model=ollama_model,
-                    is_initial_aug_request=True
+                    is_initial_aug_request=True,
                 )
 
             logger.debug(f"FIRST REQUEST AUG INITIAL PROMPT:\n{textwrap.indent(prompt, "  PF  ")}")
             if first_request_refined_prompt is not None:
-                logger.debug(f"FIRST REQUEST AUG REFINED PROMPT:\n{textwrap.indent(first_request_refined_prompt, "  PR  ")}")
+                logger.debug(
+                    f"FIRST REQUEST AUG REFINED PROMPT:\n{textwrap.indent(first_request_refined_prompt, "  PR  ")}"
+                )
 
             if refinelog:
                 refinelog.write(f"\nFIRST REQUEST AUG INITIAL PROMPT:\n{textwrap.indent(prompt, "  PF  ")}\n\n")
                 if first_request_refined_prompt is not None:
-                    refinelog.write(f"\nFIRST REQUEST AUG REFINED PROMPT:\n{textwrap.indent(first_request_refined_prompt, "  PR  ")}\n\n")
+                    refinelog.write(
+                        f"\nFIRST REQUEST AUG REFINED PROMPT:\n{textwrap.indent(first_request_refined_prompt, "  PR  ")}\n\n"
+                    )
 
-
-        resp:  dict | Mapping[str, Any] | Iterator[Mapping[str, Any]] = ask_ollama_chat(
+        resp: dict | Mapping[str, Any] | Iterator[Mapping[str, Any]] = ask_ollama_chat(
             streamed=streamed,
             system_prompt=None,  # need to provide msg_history then
             prompt=first_request_refined_prompt if first_request_refined_prompt else prompt,
@@ -230,13 +218,15 @@ class OllamaEmailReply:
             aug_only_contracts=aug_only_contracts,
             aug_lang_filter=aug_lang_filter,
             is_initial_aug_request=False,
-            is_history_mode=is_history_mode
+            is_history_mode=is_history_mode,
         )
 
         return new_text_refined, resp
 
     @classmethod
-    def generate_msgs_for_ollama(cls, lang: Literal["de", "en"] | None, previous_texts: list[tuple[str, bool]], initial_topic: str) -> list[Message]:
+    def generate_msgs_for_ollama(
+        cls, lang: Literal["de", "en"] | None, previous_texts: list[tuple[str, bool]], initial_topic: str
+    ) -> list[Message]:
         msgs: list[Message] = []
 
         priming_msg: OllamaPrimingMessage
@@ -244,12 +234,8 @@ class OllamaEmailReply:
             if priming_msg.lang != lang:
                 continue
             msgs.append(
-                Message(
-                    role=priming_msg.role,
-                    content=priming_msg.content.replace("$INITIAL_TOPIC", initial_topic)
-                )
+                Message(role=priming_msg.role, content=priming_msg.content.replace("$INITIAL_TOPIC", initial_topic))
             )
-
 
         for prev_mailbody, prev_fromarley in previous_texts:
             if prev_fromarley:
@@ -258,7 +244,6 @@ class OllamaEmailReply:
                 msgs.append(Message(role="user", content=prev_mailbody))
 
         return msgs
-
 
     def create_arley_email_in_db_from_response(
         self,
@@ -304,13 +289,12 @@ class OllamaEmailReply:
 
         res: DBObjectInsertUpdateDeleteResult | None = aeid.insertnew()
         if res is not None and res.exception_occured():
-            ex: Exception|None = res.get_exception()
+            ex: Exception | None = res.get_exception()
             if ex is not None:
                 logger.error(Helper.get_exception_tb_as_string(ex))
             return None
 
         return aeid
-
 
     def process_request(self, streamed: bool = True) -> None:
         # streamed = True for long running responses from ollama, this makes waiting a bit easier, but logging could get a bit messy
@@ -327,8 +311,8 @@ class OllamaEmailReply:
         # str(mailbody), bool(fromarley)
         previous_texts: list[tuple[str, bool]] = []
 
-        initial_topic: str|None = self.mailindb.subject
-        initial_prompt: str|None = self.mailindb.mailbody
+        initial_topic: str | None = self.mailindb.subject
+        initial_prompt: str | None = self.mailindb.mailbody
 
         # 1. die vorigen mails ziehen, wenn vorige da sein könnten
         if self.mailindb.sequencenumber is not None and self.mailindb.sequencenumber > 0:
@@ -354,20 +338,27 @@ class OllamaEmailReply:
         ollama_response: dict | None = None
         lang_detect_content: dict | None = None
 
-
         assert initial_prompt is not None and initial_topic is not None
         lang_detect_text: str = (
             f"{initial_topic[:min(len(initial_prompt), 128)]}\n" f"{initial_prompt[:min(len(initial_prompt), 128)]}"
         )
         lang_detect_text = lang_detect_text.strip()
 
-        ret: Literal['de', 'en']|Tuple[Literal['de', 'en'], dict, dict]|None = None
+        ret: Literal["de", "en"] | Tuple[Literal["de", "en"], dict, dict] | None = None
         try:
-            ret = LanguageGuesser.guess_language(input_text=lang_detect_text, only_return_str=False,
-                                                 ollama_host=OLLAMA_HOST, ollama_model=OLLAMA_GUESS_LANGUAGE_MODEL,
-                                                 ollama_options=get_ollama_options(OLLAMA_GUESS_LANGUAGE_MODEL),
-                                                 print_msgs=True, print_response=True, print_request=True, print_http_response=False,
-                                                 print_http_request=False, max_retries=3)
+            ret = LanguageGuesser.guess_language(
+                input_text=lang_detect_text,
+                only_return_str=False,
+                ollama_host=OLLAMA_HOST,
+                ollama_model=OLLAMA_GUESS_LANGUAGE_MODEL,
+                ollama_options=get_ollama_options(OLLAMA_GUESS_LANGUAGE_MODEL),
+                print_msgs=True,
+                print_response=True,
+                print_request=True,
+                print_http_response=False,
+                print_http_request=False,
+                max_retries=3,
+            )
         except Exception as ex:
             logger.exception(Helper.get_exception_tb_as_string(ex))
 
@@ -384,9 +375,7 @@ class OllamaEmailReply:
         self.mailindb.lang = lang
 
         msgs: list[Message] = self.generate_msgs_for_ollama(
-            lang=lang,
-            previous_texts=previous_texts,
-            initial_topic=initial_topic
+            lang=lang, previous_texts=previous_texts, initial_topic=initial_topic
         )
 
         assert self.mailindb.mailbody is not None
@@ -429,18 +418,18 @@ class OllamaEmailReply:
             first_request_aug_only_contracts=ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
             print_msgs=True,
             print_responses=True,
-            refinelog=refinelog
+            refinelog=refinelog,
         )
         call_end: float = perf_counter()
 
         self.logger.debug(f"OLLAMA CALL DONE in :: {(call_end-call_start):.2f}s")
 
-        new_text_refined_wo_think_tag: str|None
-        new_text_refined_think_tag: str|None
+        new_text_refined_wo_think_tag: str | None
+        new_text_refined_think_tag: str | None
         new_text_refined_wo_think_tag, new_text_refined_think_tag = Helper.detach_think_tag(_new_text_refined)
 
         try:
-            if REFINELOG_RECIPIENTS and len(REFINELOG_RECIPIENTS)>0:
+            if REFINELOG_RECIPIENTS and len(REFINELOG_RECIPIENTS) > 0:
                 Helper.maillog(
                     text=refinelog.getvalue(),
                     subject=f"REFINELOG::{self.mailindb.rootemailid}",
@@ -455,7 +444,7 @@ class OllamaEmailReply:
             ollamamsgs=msgs,
             new_text=new_text_refined_wo_think_tag,  # _new_text_refined,
             ollama_response=resp,
-            lang=lang  # type: ignore
+            lang=lang,  # type: ignore
         )
 
         if new_answer:
@@ -466,7 +455,6 @@ class OllamaEmailReply:
         else:
             # setting processresult to FAILED ?!
             self.logger.debug(f"NO NEW ANSWER CREATED IN DB for mail[emailid={self.mailindb.emailid}]")
-
 
     def handle_pending_mailout(self) -> None:
         if self.mailindb.toarley:
@@ -485,7 +473,7 @@ class OllamaEmailReply:
         self.logger.debug(f"{sql} -> {len(previous)=}")
 
         # per logik gibt es eine email VOR dieser email
-        answering_to_email_id: uuid.UUID|None = previous[0].emailid
+        answering_to_email_id: uuid.UUID | None = previous[0].emailid
 
         assert previous[0].envelopeemailid is not None
         in_reply_to: str = previous[0].envelopeemailid.strip()
@@ -495,13 +483,13 @@ class OllamaEmailReply:
 
         references.write(in_reply_to)  # append email-id of the email replying to
 
-        answerint_to_email_rawdata: ArleyRawEmailInDB|None = ArleyRawEmailInDB.get_one_from_sql(
+        answerint_to_email_rawdata: ArleyRawEmailInDB | None = ArleyRawEmailInDB.get_one_from_sql(
             f"select * from rawemails where emailid='{answering_to_email_id}'"
         )
 
         assert answerint_to_email_rawdata is not None and previous[0].received is not None
-        previous_text: str|None = answerint_to_email_rawdata.textmailbody
-        previous_sender: str|None = previous[0].frommail
+        previous_text: str | None = answerint_to_email_rawdata.textmailbody
+        previous_sender: str | None = previous[0].frommail
         previous_datum_dt: datetime.datetime = previous[0].received.astimezone(_timezone)
         previous_datum: str = previous_datum_dt.isoformat(timespec="seconds")
 
@@ -563,7 +551,9 @@ class OllamaEmailReply:
         self.logger.debug(f"{fp.absolute()=}")
 
         with open(fp) as file_:
-            template = Environment(loader=FileSystemLoader(fp.parent), trim_blocks=True, lstrip_blocks=True).from_string(file_.read())
+            template = Environment(
+                loader=FileSystemLoader(fp.parent), trim_blocks=True, lstrip_blocks=True
+            ).from_string(file_.read())
 
         serverinfo = MailReport.SMTPServerInfo(
             smtp_server=settings.emailsettings.smtpserver,
@@ -622,10 +612,9 @@ class OllamaEmailReply:
 
         return None
 
+
 def _process_pending_mailouts(set_failed_mailout_to_failed_in_db: bool = False, newestfirst: bool = True) -> None:
-    sqlout: str = (
-        f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received"
-    )
+    sqlout: str = f"select * from emails where processresult='{Result.pending.value}' and fromarley order by received"
     if not newestfirst:
         sqlout += " desc"  # dann die neuesten zuerst
 
@@ -645,7 +634,6 @@ def _process_pending_mailouts(set_failed_mailout_to_failed_in_db: bool = False, 
                     raise ex
 
 
-
 def _cleanup_from_previous_working_state() -> None:
     # this is a fresh start - as for now, the assumption is, that there is only ONE worker running the "queue"
     # -> just update WORKING-items in the DB to PENDING-itmes in the DB...
@@ -654,9 +642,11 @@ def _cleanup_from_previous_working_state() -> None:
         f"select * from emails where processresult='{Result.working.value}'"  # egal, ob VON oder AN arley
     )
     mails_working_from_previous_run: list[ArleyEmailInDB] | None = ArleyEmailInDB.get_list_from_sql(
-        sql_working_emails_from_last_run)
+        sql_working_emails_from_last_run
+    )
     logger.debug(
-        f"PREVIOUS_WORKING sql_working_emails_from_last_run={sql_working_emails_from_last_run} => {len(mails_working_from_previous_run) if mails_working_from_previous_run else 0}")
+        f"PREVIOUS_WORKING sql_working_emails_from_last_run={sql_working_emails_from_last_run} => {len(mails_working_from_previous_run) if mails_working_from_previous_run else 0}"
+    )
 
     if mails_working_from_previous_run:
         for mail in mails_working_from_previous_run:
@@ -664,7 +654,10 @@ def _cleanup_from_previous_working_state() -> None:
             mail.save()
             logger.debug(f"setting email with emailid={mail.emailid} fromarley={mail.fromarley} to pending")
 
-        _process_pending_mailouts(set_failed_mailout_to_failed_in_db=True, newestfirst=False)  # wenn die schon in der db sind, hat nur der mailout nicht funktioniert
+        _process_pending_mailouts(
+            set_failed_mailout_to_failed_in_db=True, newestfirst=False
+        )  # wenn die schon in der db sind, hat nur der mailout nicht funktioniert
+
 
 def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | None:
     try:
@@ -701,7 +694,6 @@ def main(timeout_per_loop: int = 5, max_loop: int | None = None) -> Exception | 
                         time.sleep(timeout_per_loop)
                         return e  # TODO HT 20240714 check!
 
-            
             try:
                 _process_pending_mailouts(set_failed_mailout_to_failed_in_db=False, newestfirst=True)
             except Exception as e:

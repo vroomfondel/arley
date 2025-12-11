@@ -1,13 +1,10 @@
 from typing import Optional
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy.inspection
-from sqlalchemy.dialects.postgresql.base import PGInspector
-
 # import dbconnection
-from sqlalchemy import inspect, select
-
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, inspect, select
+from sqlalchemy.dialects.postgresql.base import PGInspector
 from sqlalchemy.sql.schema import Table
 
 # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflecting-all-tables-at-once
@@ -21,8 +18,7 @@ def as_valid_uuid4(uuid_to_test: str) -> Optional[UUID]:
         return None
 
 
-def main() -> None:
-    ...
+def main() -> None: ...
 
 
 # meta = MetaData()

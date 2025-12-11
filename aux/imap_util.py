@@ -8,16 +8,13 @@ from typing import Any
 
 import pytz
 from imapclient.response_types import Envelope
+from loguru import logger
 from ollama import Message
 
 from arley import Helper
-from arley.config import settings, is_in_cluster
-from arley.dbobjects.emailindb import ArleyRawEmailInDB, ArleyEmailInDB
-
+from arley.config import is_in_cluster, settings
+from arley.dbobjects.emailindb import ArleyEmailInDB, ArleyRawEmailInDB
 from arley.emailinterface.imapadapter import IMAPAdapter
-
-from loguru import logger
-
 from arley.emailinterface.myemailmessage import MyEmailMessage
 from arley.emailinterface.ollamaemailreply import OllamaEmailReply
 
@@ -27,12 +24,16 @@ _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 def adapt_emails_ollama_msgs() -> None:
     # generate_msgs_for_ollama
     # select length(ollamamsgs::text),emailid,ollamamsgs from emails where length(ollamamsgs::text)>2;
-    emailsindb_from_arley: list[ArleyEmailInDB] = ArleyEmailInDB.get_list_from_sql("select * from emails where fromarley and processresult='processed' order by received desc")
+    emailsindb_from_arley: list[ArleyEmailInDB] = ArleyEmailInDB.get_list_from_sql(
+        "select * from emails where fromarley and processresult='processed' order by received desc"
+    )
     #  where select distinct rootemailid, received from emails where fromarley order by received desc, rootemailid
     for emailindb in emailsindb_from_arley:
         previous_texts: list[tuple[str, bool]] = []
 
-        prev_sql: str = f"select * from emails where rootemailid='{emailindb.rootemailid}' and sequencenumber<{emailindb.sequencenumber} order by sequencenumber asc"
+        prev_sql: str = (
+            f"select * from emails where rootemailid='{emailindb.rootemailid}' and sequencenumber<{emailindb.sequencenumber} order by sequencenumber asc"
+        )
         logger.debug(f"{prev_sql=}")
 
         previous: list[ArleyEmailInDB] = ArleyEmailInDB.get_list_from_sql(prev_sql)
@@ -49,7 +50,9 @@ def adapt_emails_ollama_msgs() -> None:
         # previous_texts.append((emailindb.mailbody, emailindb.fromarley))
 
         assert initial_topic
-        msgs: list[Message] = OllamaEmailReply.generate_msgs_for_ollama(lang="de", previous_texts=previous_texts, initial_topic=initial_topic)
+        msgs: list[Message] = OllamaEmailReply.generate_msgs_for_ollama(
+            lang="de", previous_texts=previous_texts, initial_topic=initial_topic
+        )
         logger.debug(msgs)
         # email_message: EmailMessage = email.message_from_string(rawemail.rawemail)  # type: ignore
 
@@ -57,6 +60,7 @@ def adapt_emails_ollama_msgs() -> None:
         emailindb.save()
         # if msgs:
         #     break
+
 
 def adapt_rawemails() -> None:
     rawemailsindb: list[ArleyRawEmailInDB] = ArleyRawEmailInDB.get_list_from_sql("select * from rawemails")
@@ -89,7 +93,9 @@ def adapt_rawemails() -> None:
         )
         logger.debug(f"Date: {type(rdd)=}\t{rdd=}")
 
-        aeid: ArleyEmailInDB|None = ArleyEmailInDB.get_one_from_sql(f"select * from emails where emailid='{rawemail.emailid}'")
+        aeid: ArleyEmailInDB | None = ArleyEmailInDB.get_one_from_sql(
+            f"select * from emails where emailid='{rawemail.emailid}'"
+        )
 
         assert aeid
         aeid.received = rd
@@ -97,9 +103,6 @@ def adapt_rawemails() -> None:
             aeid.received = rdd
 
         aeid.save()
-
-
-
 
 
 def check() -> None:
@@ -116,7 +119,7 @@ def check() -> None:
                 logger.debug(f"{'*' * 50}")
                 logger.debug(f"{msgid=}")
                 logger.debug(env)
-                myemail: MyEmailMessage|None = ima.get_message(msgid, folder=folder)
+                myemail: MyEmailMessage | None = ima.get_message(msgid, folder=folder)
                 if not myemail:
                     continue
 

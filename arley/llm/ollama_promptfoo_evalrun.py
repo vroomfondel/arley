@@ -10,7 +10,7 @@
 # docker run -d --name promptfoo_container -p 3000:3000 -v ${HOME}/promptfoo/DATA:/root/.promptfoo xomoxcc/promptfoo:latest
 
 # share-run
-#-e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 promptfoo share -y
+# -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 promptfoo share -y
 
 
 # These configuration options can also be set under the sharing property of your promptfoo config:
@@ -27,18 +27,14 @@
 # docker exec -it promptfoo-ui /usr/local/bin/promptfoo /usr/local/bin/promptfoo init PF
 
 
-
 # OLD:
 # docker run -it --rm --name promptfoo-cli -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF xomoxcc/promptfoo:latest /usr/local/bin/promptfoo init PF
-
-
 
 
 # promptfoo-cli
 # evalrun
 # docker run -it --rm --name promptfoo-cli --network=host --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de -e PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF -v ${HOME}/promptfoo/DATA:/root/.promptfoo xomoxcc/promptfoo:latest /usr/local/bin/promptfoo eval -c /app/PF/promptfooconfig.yaml --interactive-providers --max-concurrency=1 --no-cache
 # docker exec -it promptfoo-ui -e  PROMPTFOO_REMOTE_API_BASE_URL=http://127.0.0.1:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://127.0.0.1:3000 /usr/local/bin/promptfoo eval -o /app/PF/output.json -c /app/PF/promptfooconfig.yaml
-
 
 
 # NO-CACHE:
@@ -49,11 +45,8 @@
 # docker run -it --rm --name promptfoo-cli --add-host=ollama.intra.fara.de:10.6.0.10 -e OLLAMA_BASE_URL=http://ollama.intra.fara.de -e PROMPTFOO_SHARE_STORE_TYPE=filesystem -e PROMPTFOO_REMOTE_API_BASE_URL=http://localhost:3000 -e PROMPTFOO_REMOTE_APP_BASE_URL=http://localhost:3000 -v ${HOME}/promptfoo/DATA_CLI:/app/PF xomoxcc/promptfoo:latest /usr/local/bin/promptfoo eval -o /app/PF/output.json -c /app/PF/promptfooconfig.yaml
 
 
-
-
 import json
 import sys
-
 
 # Python variables
 # For Python, the approach is similar. Define a Python script that includes a get_var function to generate your variable's value. The function should accept var_name, prompt, and other_vars.
@@ -75,23 +68,21 @@ import sys
 #     # Handle potential errors
 #     # return { 'error': 'Error message' }
 
+
 def my_prompt_function(context: dict) -> str:
 
-    provider: dict = context['providers']
-    provider_id: str = provider['id']  # ex. openai:gpt-4o or bedrock:anthropic.claude-3-sonnet-20240229-v1:0
-    provider_label: str | None = provider.get('label') # exists if set in promptfoo config.
+    provider: dict = context["providers"]
+    provider_id: str = provider["id"]  # ex. openai:gpt-4o or bedrock:anthropic.claude-3-sonnet-20240229-v1:0
+    provider_label: str | None = provider.get("label")  # exists if set in promptfoo config.
 
-    variables: dict = context['vars'] # access the test case variables
+    variables: dict = context["vars"]  # access the test case variables
 
-    return (
-        f"Describe {variables['topic']} concisely, comparing it to the Python"
-        " programming language."
-    )
+    return f"Describe {variables['topic']} concisely, comparing it to the Python" " programming language."
+
 
 if __name__ == "__main__":
     # If you don't specify a `function_name` in the provider string, it will run the main
     print(my_prompt_function(json.loads(sys.argv[1])))
-
 
 
 # Python script

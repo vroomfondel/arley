@@ -1,27 +1,23 @@
-import hashlib
-import re
-import uuid
-from io import StringIO
-from pathlib import Path
-from typing import Dict, Tuple, Optional, Any, ClassVar, TypeVar, Self, Literal, Callable, List
-import json
-import traceback
-
 import datetime
-
+import hashlib
+import json
+import re
+import sys
+import traceback
+import uuid
 # import functools
 # https://docs.python.org/3/library/functools.html
 from functools import wraps
-import sys
-
-import pytz
-# from redis import Redis #StrictRedis #since 3.0 StrictRedis IS Redis
-from redis import Redis, ConnectionPool
-from typing import Optional
+from io import StringIO
+from pathlib import Path
+from typing import (Any, Callable, ClassVar, Dict, List, Literal, Optional,
+                    Self, Tuple, TypeVar)
 from uuid import UUID
 
+import pytz
 import ruamel.yaml
-
+# from redis import Redis #StrictRedis #since 3.0 StrictRedis IS Redis
+from redis import ConnectionPool, Redis
 from reputils import MailReport
 
 try:
@@ -37,7 +33,8 @@ from loguru import logger
 # from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 # from redis.commands.search.query import NumericFilter, Query
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 # https://stackoverflow.com/questions/6760685/what-is-the-best-way-of-implementing-singleton-in-python
 class Singleton(type):
@@ -75,7 +72,7 @@ def get_redis() -> Redis:
     #   )
 
 
-def get_exception_tb_as_string(exc: Exception|None) -> str|None:
+def get_exception_tb_as_string(exc: Exception | None) -> str | None:
     if exc is None:
         return None
 
@@ -129,7 +126,7 @@ def get_pretty_dict_json_no_sort(data: Any, indent: int = 4) -> str:
 def set_redis_str(
     name: str, value: str, ex: Optional[int] = None, nx: bool = False, get: bool = False
 ) -> Optional[str | bool]:
-    ret: Optional[str | bool | Literal['']] = get_redis().set(name=name, value=value, ex=ex, nx=nx, get=get)  # type: ignore
+    ret: Optional[str | bool | Literal[""]] = get_redis().set(name=name, value=value, ex=ex, nx=nx, get=get)  # type: ignore
     return ret
 
 
@@ -154,7 +151,7 @@ def set_redis_json(
     ex: Optional[int] = None,
     nx: bool = False,
     get: bool = False,
-) -> Optional[Dict | bool | Literal['']]:
+) -> Optional[Dict | bool | Literal[""]]:
     ret_1: Optional[str | bool] = set_redis_str(name=name, value=json.dumps(value, default=str), ex=ex, nx=nx, get=get)
     if ret_1 and isinstance(ret_1, str):
         return json.loads(ret_1)
@@ -219,11 +216,12 @@ def rediscached(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def get_md5_for_file(file: Path) -> str:
-    with open(file, 'rb') as f:
+    with open(file, "rb") as f:
         file_hash = hashlib.md5()
         while chunk := f.read(4_096):
             file_hash.update(chunk)
     return file_hash.hexdigest()
+
 
 def get_dict_as_yaml_str(data: dict) -> str:
     yaml = ruamel.yaml.YAML()
@@ -232,14 +230,16 @@ def get_dict_as_yaml_str(data: dict) -> str:
     yaml.dump(data, stream=strwriter)
     return strwriter.getvalue()
 
-def flatten(d: dict, parent_key: str='') -> dict:
+
+def flatten(d: dict, parent_key: str = "") -> dict:
     items: List = []
     for k, v in d.items():
         try:
-            items.extend(flatten(v, '%s%s_' % (parent_key, k)).items())
+            items.extend(flatten(v, "%s%s_" % (parent_key, k)).items())
         except AttributeError:
-            items.append(('%s%s' % (parent_key, k), v))
+            items.append(("%s%s" % (parent_key, k), v))
     return dict(items)
+
 
 def flatten_lists(d: dict) -> dict:
     ret: dict = {}
@@ -257,12 +257,13 @@ def flatten_lists(d: dict) -> dict:
 
     return ret
 
-def detach_NOTE_line(txt: str) -> Tuple[str,str|None]:
+
+def detach_NOTE_line(txt: str) -> Tuple[str, str | None]:
     ret_note: Optional[str] = None
     ret: StringIO = StringIO()
     txt_reader: StringIO = StringIO(txt)
 
-    line: str|None
+    line: str | None
     while True:
         line = txt_reader.readline()
         if not line:
@@ -276,7 +277,9 @@ def detach_NOTE_line(txt: str) -> Tuple[str,str|None]:
     return ret.getvalue(), ret_note
 
 
-def maillog(subject: str, from_mail: str, text: str, mailrecipients_to: list[str], mailrecipients_cc: list[str]|None = None) -> str:
+def maillog(
+    subject: str, from_mail: str, text: str, mailrecipients_to: list[str], mailrecipients_cc: list[str] | None = None
+) -> str:
     _timezone: datetime.tzinfo = pytz.timezone(settings.timezone)
 
     _sdfD_formatstring: str = "%d.%m.%Y"
@@ -300,21 +303,21 @@ def maillog(subject: str, from_mail: str, text: str, mailrecipients_to: list[str
         serverinfo=serverinfo,
         returnpath=MailReport.EmailAddress.fromSTR(from_mail),
         replyto=MailReport.EmailAddress.fromSTR(from_mail),
-        subject=subject
+        subject=subject,
     )
     sendmail.tos = [MailReport.EmailAddress.fromSTR(k) for k in [mailrecipients_to]]
 
     if mailrecipients_cc is not None:
         sendmail.ccs = [MailReport.EmailAddress.fromSTR(k) for k in mailrecipients_cc]
 
-    sent_mail: str = sendmail.send(
-        txt=text
-    )
+    sent_mail: str = sendmail.send(txt=text)
     return sent_mail
 
 
-_think_tag_pattern: re.Pattern[str] = re.compile(r"<think>\s*(.*?)\s*</think>\s*(.*)",  re.MULTILINE | re.DOTALL)
-def detach_think_tag(input_text: Optional[str]) -> Tuple[str|None, str|None]:
+_think_tag_pattern: re.Pattern[str] = re.compile(r"<think>\s*(.*?)\s*</think>\s*(.*)", re.MULTILINE | re.DOTALL)
+
+
+def detach_think_tag(input_text: Optional[str]) -> Tuple[str | None, str | None]:
     if not input_text:
         return None, None
 
@@ -339,7 +342,3 @@ def detach_think_tag(input_text: Optional[str]) -> Tuple[str|None, str|None]:
 
     # no match
     return input_text, None
-
-
-
-

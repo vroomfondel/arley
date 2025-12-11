@@ -1,49 +1,43 @@
+import json
+import sys
 import textwrap
+import threading
+import time
 from functools import partial
+from io import StringIO
 from pathlib import Path
-from typing import Union, TextIO, Dict
+from typing import (Any, Dict, Iterator, Literal, Mapping, Optional, Sequence,
+                    TextIO, Union)
+
+import ollama
+from jinja2 import Environment, FileSystemLoader
+from loguru import logger
+from ollama import EmbeddingsResponse, Message, Tool
+
+from arley import Helper
+from arley.config import (OLLAMA_HOST, TEMPLATEDIRPATH, TemplateType,
+                          get_ollama_options)
+from arley.llm.ollama_tools import FUNCTION_SCHEMA, TOOLSSTRING
 
 # if TYPE_CHECKING:
 #     from _typeshed import SupportsWrite
 
-from io import StringIO
 
-from jinja2 import Environment, FileSystemLoader
+
 # from pprint import pprint
 
-from ollama import Message, EmbeddingsResponse
-from ollama import Tool
-
-from arley import Helper
 
 
-from arley.config import (
-    TemplateType,
-    OLLAMA_HOST,
-    get_ollama_options,
-    TEMPLATEDIRPATH
-)
 
-import json
-import sys
-import threading
-import time
-from typing import Sequence, Optional, Literal, Mapping, Any, Iterator
 
-import ollama
 
-from loguru import logger
 
-from arley.llm.ollama_tools import TOOLSSTRING, FUNCTION_SCHEMA
 
-_OLLAMA_HTTPX_CLIENT_TIMEOUT: float|None = None
+
+_OLLAMA_HTTPX_CLIENT_TIMEOUT: float | None = None
 
 logger.debug(f"OLLAMA_HOST: {OLLAMA_HOST}")
-OLLAMA_CLIENT = ollama.Client(
-    host=OLLAMA_HOST,
-    timeout=_OLLAMA_HTTPX_CLIENT_TIMEOUT
-)
-
+OLLAMA_CLIENT = ollama.Client(host=OLLAMA_HOST, timeout=_OLLAMA_HTTPX_CLIENT_TIMEOUT)
 
 
 # def ask_ollama_generate(
@@ -166,6 +160,7 @@ OLLAMA_CLIENT = ollama.Client(
 #
 #     return ret
 
+
 def ask_ollama_chat(
     system_prompt: str | None,
     prompt: str,
@@ -186,14 +181,14 @@ def ask_ollama_chat(
     print_msgs: bool = False,
     print_response: bool = False,
     # context_in: Optional[Sequence[int]] = None,
-    streamed_print_to_io: TextIO|Any|None = sys.stdout,
+    streamed_print_to_io: TextIO | Any | None = sys.stdout,
     print_options: bool = False,
     keep_alive: int = 300,  # was: -1
     max_tries_ollama_done_response: int = 21,
     # tools: ToolBox | None = None,
     tools: Optional[Sequence[Tool]] = None,
     print_chunks_when_streamed: bool = False,
-    think: Literal['low', 'medium', 'high']|bool|None = None
+    think: Literal["low", "medium", "high"] | bool | None = None,
 ) -> dict | Mapping[str, Any] | Iterator[Mapping[str, Any]]:
     """
     Function to request a response from ollama.
@@ -226,14 +221,15 @@ def ask_ollama_chat(
         dict | Mapping[str, Any] | Iterator[Mapping[str, Any]]: The output of the function, which can be a dictionary, a mapping, or an iterator of mappings.
     """
 
-    options: dict = get_ollama_options(model=model,
-                                       top_k=top_k,
-                                       top_p=top_p,
-                                       seed=seed,
-                                       temperature=temperature,
-                                       num_predict=num_predict,
-                                       repeat_penalty=repeat_penalty
-                                       )
+    options: dict = get_ollama_options(
+        model=model,
+        top_k=top_k,
+        top_p=top_p,
+        seed=seed,
+        temperature=temperature,
+        num_predict=num_predict,
+        repeat_penalty=repeat_penalty,
+    )
 
     if print_options:
         logger.debug(Helper.get_pretty_dict_json_no_sort(options))
@@ -261,9 +257,8 @@ def ask_ollama_chat(
             logger.debug(f"ROLE: {msg["role"]}")
             logger.debug(f"CONTENT:\n{textwrap.indent(msg["content"], "\t")}")
 
-        #logger.debug(Helper.get_pretty_dict_json_no_sort(msgs))
+        # logger.debug(Helper.get_pretty_dict_json_no_sort(msgs))
         # Helper.print_pretty_dict_json(msgs)
-
 
     ret: Optional[dict[str, Any]] = None
     output: Optional[Union[Mapping[str, Any], Iterator[Mapping[str, Any]]]] = None
@@ -276,7 +271,7 @@ def ask_ollama_chat(
             format=return_format,
             options=options,
             keep_alive=keep_alive,
-            think=think
+            think=think,
         )
 
         if isinstance(output, Mapping):
@@ -328,7 +323,7 @@ def ask_ollama_chat(
 
                 ret.update(chunk)
                 ret["message"]["content"] = out.getvalue()
-                ret["chunk_count"] = chunkidx+1
+                ret["chunk_count"] = chunkidx + 1
 
                 ret["load_dur_seconds"] = load_dur_seconds
                 ret["total_dur_seconds"] = total_dur_seconds
@@ -337,7 +332,6 @@ def ask_ollama_chat(
                 # WANT: response["message"]["content"]
                 break
 
-
     if ret is None and chunk is not None and out is not None:  # type: ignore
         ret = {}
 
@@ -345,7 +339,6 @@ def ask_ollama_chat(
         ret["message"]["content"] = out.getvalue()  # type: ignore
         ret["chunk_count"] = chunkidx + 1  # type: ignore
         ret["CHUNK_RESP_RESPONSE"] = True
-
 
     if print_response:
         logger.debug(Helper.get_pretty_dict_json_no_sort(ret))
@@ -373,25 +366,28 @@ def get_available_models() -> None:
         logger.info(json.dumps(k))
 
 
-def _get_fc_call_generate_priming_history(function_schema: dict, toolstring: str, allow_backticked_json: bool = False) -> list[Message]:
+def _get_fc_call_generate_priming_history(
+    function_schema: dict, toolstring: str, allow_backticked_json: bool = False
+) -> list[Message]:
     msgs: list[Message] = []
 
     system_pr: StringIO = StringIO()
 
-    system_pr.write(f"I am a helpful assistant that takes a question and finds the most appropriate tool or tools to execute, "
-                       f"along with the parameters required to run the tool. For the tools, I will only choose \"WebSearch\" as a last resort if no other tool can be used to fullfill the request.\n"
-                       f"I will make sure to use the proper type of value (e.g. string, float, int) and have in mind, that only string values need to be enclosed with apostrophes.\n"
-                       f"Even if I am asked the same question again (or again and again), I will answer as if I would have been asked the question for the first time.\n"
-                       f"I will not respond with implementation hints or stubs and absolutely make sure to not invent any tools not given below and to stick rigidly to the functionName and signature of any supplied tool.\n"
-                    )
+    system_pr.write(
+        f"I am a helpful assistant that takes a question and finds the most appropriate tool or tools to execute, "
+        f'along with the parameters required to run the tool. For the tools, I will only choose "WebSearch" as a last resort if no other tool can be used to fullfill the request.\n'
+        f"I will make sure to use the proper type of value (e.g. string, float, int) and have in mind, that only string values need to be enclosed with apostrophes.\n"
+        f"Even if I am asked the same question again (or again and again), I will answer as if I would have been asked the question for the first time.\n"
+        f"I will not respond with implementation hints or stubs and absolutely make sure to not invent any tools not given below and to stick rigidly to the functionName and signature of any supplied tool.\n"
+    )
 
     if allow_backticked_json:
-        system_pr.write(
-            f"I will make sure to use backticks for 'json' markup when returning json in my response!\n"
-        )
+        system_pr.write(f"I will make sure to use backticks for 'json' markup when returning json in my response!\n")
     else:
         system_pr.write(f"I will make sure NOT to use backticks or 'json' markup in my responses!\n")
-        system_pr.write(f"Also, I will absolutely not put anything else in my response (e.g. \"Note\", \"explanatory text\" etc.) aside from my response within that JSON schema.\n")
+        system_pr.write(
+            f'Also, I will absolutely not put anything else in my response (e.g. "Note", "explanatory text" etc.) aside from my response within that JSON schema.\n'
+        )
 
     system_pr.write(
         f"I will output as JSON following the following schema rigidly.\n"
@@ -401,9 +397,7 @@ def _get_fc_call_generate_priming_history(function_schema: dict, toolstring: str
         f"{toolstring}"
     )
 
-    msgs.append(
-        Message(role="system", content=system_pr.getvalue())
-    )
+    msgs.append(Message(role="system", content=system_pr.getvalue()))
 
     fc_questions: dict = {
         "What is the current date and time?": {
@@ -431,8 +425,9 @@ def _get_fc_call_generate_priming_history(function_schema: dict, toolstring: str
         },
         "current CEO of tesla": {  # who is the current ceo of tesla?
             "functionName": "WebSearch",
-            "parameters": [{"parameterName": "query", "allowed_value_type": "string",
-                            "parameterValue": "current CEO of tesla"}],
+            "parameters": [
+                {"parameterName": "query", "allowed_value_type": "string", "parameterValue": "current CEO of tesla"}
+            ],
         },
         "What City is located at 41.881832, -87.640406?": {
             "functionName": "LatLonToCity",
@@ -446,12 +441,7 @@ def _get_fc_call_generate_priming_history(function_schema: dict, toolstring: str
     for fcq in fc_questions:
         msgs.append(Message(role="user", content=fcq))
 
-        msgs.append(
-            Message(
-                role="assistant",
-                content=Helper.get_pretty_dict_json_no_sort(fc_questions[fcq])
-            )
-        )
+        msgs.append(Message(role="assistant", content=Helper.get_pretty_dict_json_no_sort(fc_questions[fcq])))
 
         if allow_backticked_json:
             msgs[-1]["content"] = "```json\n" + msgs[-1]["content"] + "\n```"
@@ -477,7 +467,7 @@ def function_call_generate(
     ollama_return_format: Literal["", "json"] = "json",
     allow_backticked_json: bool = False,
     print_content_json: bool = False,
-    print_options: bool = False
+    print_options: bool = False,
 ) -> tuple[dict, dict] | None:
     """
     Generates text based on the input using a pre-trained language model with various parameters for customization of output.
@@ -530,16 +520,14 @@ def function_call_generate(
 
     if not fc_call_generate_priming_history:
         fc_call_generate_priming_history = _get_fc_call_generate_priming_history(
-            function_schema=function_schema,
-            toolstring=toolstring,
-            allow_backticked_json=allow_backticked_json
+            function_schema=function_schema, toolstring=toolstring, allow_backticked_json=allow_backticked_json
         )
 
     # logger.debug(f"function_prompt:\n{msgs[0]['content']}")
 
     previous_responses: list[dict] = []
     for i in range(max_retries_json_response_parse):
-        response: Dict|Mapping[str, Any] | Iterator[Mapping[str, Any]] | None = None
+        response: Dict | Mapping[str, Any] | Iterator[Mapping[str, Any]] | None = None
         try:
             response = ask_ollama_chat(
                 streamed=False,
@@ -557,7 +545,7 @@ def function_call_generate(
                 print_response=print_response,
                 return_format=ollama_return_format,
                 print_options=print_options,
-                max_tries_ollama_done_response=2
+                max_tries_ollama_done_response=2,
             )
 
             # logger.debug(Helper.get_pretty_dict_json_no_sort(response))
@@ -608,9 +596,9 @@ def _parse_json_backticked(resp: str) -> dict:  # list[dict]:
 
     w: int = resp.find("```json")
     # logger.debug(f"{w=}")
-    #if resp.find("```json") >= 0:
-    scone = resp[w+len("```json"):]
-    scone = scone[:scone.find("```")]
+    # if resp.find("```json") >= 0:
+    scone = resp[w + len("```json") :]
+    scone = scone[: scone.find("```")]
 
     scone = scone.strip()
 
@@ -637,11 +625,13 @@ def _parse_json_backticked(resp: str) -> dict:  # list[dict]:
     # return responses
 
 
-def embeddings(prompt: str, embed_model: str = "nomic-embed-text:latest", num_ctx: int|None = 8192) -> Sequence[float|int]:
+def embeddings(
+    prompt: str, embed_model: str = "nomic-embed-text:latest", num_ctx: int | None = 8192
+) -> Sequence[float | int]:
     # nomic num_ctx: 8192
     # mxbai num_ctx: 512
 
-    options: dict|None
+    options: dict | None
 
     if num_ctx is None:
         options = None
@@ -653,6 +643,7 @@ def embeddings(prompt: str, embed_model: str = "nomic-embed-text:latest", num_ct
 
     return ret["embedding"]
 
+
 def purge_model(model: str) -> None:
     OLLAMA_CLIENT.generate(model=model, keep_alive=0)  # unloading model from vram
 
@@ -662,32 +653,43 @@ def print_me(
     end: str | None = "\n",
     flush: bool = False,
     sep: str | None = " ",
-    file: TextIO|None = sys.stdout,
+    file: TextIO | None = sys.stdout,
 ) -> None:
     print(*values, flush=flush, end=end, sep=sep, file=file)
 
 
-def render_prompt_template(template_basename: str, md_or_plaintext: str, ollama_model: str|None = None, lang: Literal["en", "de"] = "en", template_type: TemplateType = TemplateType.plain) -> str:
+def render_prompt_template(
+    template_basename: str,
+    md_or_plaintext: str,
+    ollama_model: str | None = None,
+    lang: Literal["en", "de"] = "en",
+    template_type: TemplateType = TemplateType.plain,
+) -> str:
     fp: Path = Path(TEMPLATEDIRPATH, template_type.value)
     fp = Path(fp, f"{template_basename}_{lang}_{template_type.value}.jinja")
 
     with open(fp) as file_:
-        template = Environment(loader=FileSystemLoader(fp.parent), trim_blocks=True, lstrip_blocks=True).from_string(file_.read())
+        template = Environment(loader=FileSystemLoader(fp.parent), trim_blocks=True, lstrip_blocks=True).from_string(
+            file_.read()
+        )
 
     values: dict = {
         "lang": lang,
         "md_or_plaintext": md_or_plaintext,
         "ollama_model": ollama_model,
-        "template_type": template_type.value
+        "template_type": template_type.value,
     }
 
     ret: str = template.render(values)
     return ret
 
+
 get_create_redo_prompt = partial(render_prompt_template, template_basename="get_redo_prompt")
 get_create_summary_prompt = partial(render_prompt_template, template_basename="get_summary")
 get_create_outline_prompt = partial(render_prompt_template, template_basename="get_outline")
-get_reformat_and_semantically_markup_prompt = partial(render_prompt_template, template_basename="get_reformat_and_markup")
+get_reformat_and_semantically_markup_prompt = partial(
+    render_prompt_template, template_basename="get_reformat_and_markup"
+)
 
 # class MyBaseLoader(BaseLoader):
 #     def __init__(self):
@@ -708,20 +710,17 @@ get_reformat_and_semantically_markup_prompt = partial(render_prompt_template, te
 #         return source, path, lambda: mtime == getmtime(path)
 
 
-
-
 def main() -> None:
     # compare_embeds()
 
-
-    k={"h1": 1, "h2": 2}
+    k = {"h1": 1, "h2": 2}
     for kn in k:
         print(kn)
 
     from arley.dbobjects.ragdoc import DocTypeEnum
+
     for dt in DocTypeEnum:
         print(f"{type(dt)=} {dt=} {str(dt)=}")
-
 
     if len(sys.argv) > 1 and sys.argv[1] == "list":
         get_available_models()

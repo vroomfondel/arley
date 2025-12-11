@@ -1,34 +1,28 @@
+import email
 import time
 from collections import defaultdict
 from datetime import datetime
+from email.header import decode_header
+from email.message import EmailMessage, Message
+from email.utils import parseaddr
+from typing import Any
 from uuid import UUID
 
+from imapclient import \
+    IMAPClient  # imapclient is more recent than imaplib2 -> https://github.com/mjs/imapclient/
+from imapclient.response_types import Address, BodyData, Envelope, SearchIds
+from loguru import logger
 from mailparser_reply import EmailReply
 
 from arley import Helper
-from arley.config import (
-    settings,
-    ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
-    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
-    ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP
-)
-
-import email
-from email.message import Message, EmailMessage
-from email.utils import parseaddr
-from email.header import decode_header
-
-from imapclient import IMAPClient  # imapclient is more recent than imaplib2 -> https://github.com/mjs/imapclient/
-from typing import Any
-
-from imapclient.response_types import SearchIds, Envelope, BodyData, Address
-
-from arley.emailinterface.myemailmessage import MyEmailMessage
+from arley.config import (ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+                          ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+                          ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP, settings)
 from arley.dbobjects.emailindb import ArleyEmailInDB, ArleyRawEmailInDB
+from arley.emailinterface.myemailmessage import MyEmailMessage
 
 # import imaplib2
 
-from loguru import logger
 
 LOGME_VERBOSE: bool = False
 ONLY_MAILS_FROM_PRIVILEGED_SENDER: bool = False
@@ -38,7 +32,9 @@ class IMAPAdapter:
     logger = logger.bind(classname=__qualname__)
 
     def __init__(self) -> None:
-        self.imapclient: IMAPClient = IMAPClient(settings.emailsettings.imapserver, port=settings.emailsettings.imapport, use_uid=True, ssl=False)
+        self.imapclient: IMAPClient = IMAPClient(
+            settings.emailsettings.imapserver, port=settings.emailsettings.imapport, use_uid=True, ssl=False
+        )
 
     def logout(self) -> None:
         self.imapclient.logout()
@@ -52,7 +48,7 @@ class IMAPAdapter:
             for r in resp:
                 self.logger.debug(f"RESP: {type(r)=} {r=}")
 
-    def append(self, emaildata: str, folder: str = "INBOX",  msg_time: Any = None, flags: tuple = tuple()) -> list[str]:
+    def append(self, emaildata: str, folder: str = "INBOX", msg_time: Any = None, flags: tuple = tuple()) -> list[str]:
         return self.imapclient.append(folder=folder, msg=emaildata, msg_time=msg_time, flags=flags)
 
     def list_folders(self, folder: str = "") -> list[str]:
@@ -65,8 +61,8 @@ class IMAPAdapter:
 
         ret: list[str] = []
         # (flags | delim | name)
-        folders: list[tuple[None | int | bytes, None | int | bytes, str | None | bytes]] = (
-            self.imapclient.list_folders(directory=folder)
+        folders: list[tuple[None | int | bytes, None | int | bytes, str | None | bytes]] = self.imapclient.list_folders(
+            directory=folder
         )
         for fol in folders:
             flags, delim, name = fol
@@ -121,8 +117,6 @@ class IMAPAdapter:
             need.add(actual_name)
 
         self.ensure_folders(need=need, parent_folder=parent_folder)
-
-
 
     def list_mails(self, folder: str = "INBOX") -> list[tuple[int, Envelope]]:
         select_info: dict[bytes, tuple[bytes, ...] | tuple | bool | int] = self.imapclient.select_folder(
@@ -185,36 +179,37 @@ class IMAPAdapter:
 
         email_message: EmailMessage = email.message_from_bytes(message_data[b"RFC822"])  # type: ignore
 
-        subject: str|None = MyEmailMessage.decode_my_header(email_message.get("Subject"))
+        subject: str | None = MyEmailMessage.decode_my_header(email_message.get("Subject"))
 
-        from_email: str|None = parseaddr(MyEmailMessage.decode_my_header(email_message.get("From")))[1]  # type: ignore
-        to_email: str|None = parseaddr(MyEmailMessage.decode_my_header(email_message.get("To")))[1]  # type: ignore # Delivered-to
-        envelope_message_id: str|None = MyEmailMessage.decode_my_header(email_message.get("Message-ID")).rstrip().lstrip()  # type: ignore
+        from_email: str | None = parseaddr(MyEmailMessage.decode_my_header(email_message.get("From")))[1]  # type: ignore
+        to_email: str | None = parseaddr(MyEmailMessage.decode_my_header(email_message.get("To")))[1]  # type: ignore # Delivered-to
+        envelope_message_id: str | None = MyEmailMessage.decode_my_header(email_message.get("Message-ID")).rstrip().lstrip()  # type: ignore
         if LOGME_VERBOSE:
             self.logger.debug(f"{msgid=} {envelope_message_id=}\t{from_email=} {to_email=} {subject=}")
 
         # only debug-info here...
-        in_reply_to: str|None = MyEmailMessage.decode_my_header(email_message.get("In-Reply-To"))
+        in_reply_to: str | None = MyEmailMessage.decode_my_header(email_message.get("In-Reply-To"))
         if in_reply_to:
             in_reply_to = in_reply_to.rstrip().lstrip()
         if LOGME_VERBOSE:
             self.logger.debug(f"{in_reply_to=}")
 
-        references: str|None = MyEmailMessage.decode_my_header(email_message.get("References"))
+        references: str | None = MyEmailMessage.decode_my_header(email_message.get("References"))
         if references:
             references = references.rstrip().lstrip()
         if LOGME_VERBOSE:
             self.logger.debug(f"{references=}")
 
-
-        assert from_email is not None and to_email is not None and subject is not None and envelope_message_id is not None
+        assert (
+            from_email is not None and to_email is not None and subject is not None and envelope_message_id is not None
+        )
         ret = MyEmailMessage(
             msgid=msgid,
             email_message=email_message,
             from_email=from_email,
             to_email=to_email,
             subject=subject,
-            envelope_message_id=envelope_message_id
+            envelope_message_id=envelope_message_id,
         )
 
         return ret
@@ -247,7 +242,9 @@ class IMAPAdapter:
             loopcount += 1
             try:
                 responses = self.imapclient.idle_check(timeout=timeoutperloop)
-                self.logger.debug(f"#{loopcount:>3} Server sent ({type(responses)=}): {responses if responses else "<nothing>"}")
+                self.logger.debug(
+                    f"#{loopcount:>3} Server sent ({type(responses)=}): {responses if responses else "<nothing>"}"
+                )
                 if responses:
                     ret = True
                     break
@@ -363,7 +360,9 @@ class IMAPAdapter:
         previous_emails: list[ArleyEmailInDB] | None = None
 
         if arley_id_from_subject_and_text:
-            sql: str = f"select * from emails where emailid='{str(arley_id_from_subject_and_text)}' or rootemailid='{str(arley_id_from_subject_and_text)}' order by sequencenumber desc"
+            sql: str = (
+                f"select * from emails where emailid='{str(arley_id_from_subject_and_text)}' or rootemailid='{str(arley_id_from_subject_and_text)}' order by sequencenumber desc"
+            )
             previous_emails = ArleyEmailInDB.get_list_from_sql(sql)
 
             self.logger.debug(f"{sql} -> {len(previous_emails)}")
@@ -377,16 +376,19 @@ class IMAPAdapter:
                     logger.debug(f"setting rootemailid to: {r.rootemailid=}")
                     rootemailid = r.rootemailid
 
-
         # 3. insert appropriately into db
-        aeid: ArleyEmailInDB | None = ArleyEmailInDB.insert_from_myemail(myemail=mymail, rootemailid=rootemailid, arley_email=settings.emailsettings.mailaddress, lang="de")
+        aeid: ArleyEmailInDB | None = ArleyEmailInDB.insert_from_myemail(
+            myemail=mymail, rootemailid=rootemailid, arley_email=settings.emailsettings.mailaddress, lang="de"
+        )
         if not aeid:
             # TODO HT 20240714 handle exception properly
             ex: Exception = Exception("could not create email-entry in db")
             self.logger.error(ex)
 
         assert aeid is not None
-        areid: ArleyRawEmailInDB | None = ArleyRawEmailInDB.insert_rawemail_from_myemail(myemail=mymail, arleyemailindb=aeid)
+        areid: ArleyRawEmailInDB | None = ArleyRawEmailInDB.insert_rawemail_from_myemail(
+            myemail=mymail, arleyemailindb=aeid
+        )
         if not areid:
             # TODO HT 20240714 handle exception properly
             ex2: Exception = Exception("could not create email-entry in db")
@@ -435,7 +437,7 @@ class IMAPAdapter:
                     # skip
                     continue
 
-                mymail: MyEmailMessage|None = self.get_message(msgid)
+                mymail: MyEmailMessage | None = self.get_message(msgid)
                 if mymail is not None:
                     self.process_email(sender, mymail)
             except Exception as ex:
@@ -486,23 +488,25 @@ def main(
 
     return None
 
+
 def testmode() -> None:
     ima: IMAPAdapter = IMAPAdapter()
     ima.login()
 
     logger.debug(Helper.get_pretty_dict_json_no_sort(ima.list_folders(folder="WORKED")))
-    logger.debug('*'*50)
+    logger.debug("*" * 50)
     logger.debug(Helper.get_pretty_dict_json_no_sort(ima.list_folders(folder="INBOX")))
 
     ima.ensure_base_folders()
 
     ima.logout()
 
+
 if __name__ == "__main__":
     res: Exception | None = main(
         max_idle_unsuccess_in_sequence=ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
         max_idle_loops=ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
-        timeout_per_idle_loop=ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP
+        timeout_per_idle_loop=ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP,
     )
 
     if res:
