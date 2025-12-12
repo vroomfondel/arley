@@ -1,6 +1,6 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/xomoxcc/postgreslocaled?logo=docker&label=PGVectorPostgres%20docker%20pulls)](https://hub.docker.com/r/xomoxcc/postgreslocaled/tags)
 
-![PG + pgvector](Gemini_Generated_Image_postgres_pgvector_vbw0gsvbw0gsvbw0_250x250.png)
+[![PG + pgvector](Gemini_Generated_Image_postgres_pgvector_vbw0gsvbw0gsvbw0_250x250.png)](https://hub.docker.com/r/xomoxcc/postgreslocaled/tags)
 
 PostgreSQL with pgvector (Docker)
 

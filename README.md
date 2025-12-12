@@ -3,6 +3,7 @@
 ![Cumulative Clones](https://img.shields.io/endpoint?logo=github&url=https://gist.githubusercontent.com/vroomfondel/e9ebbb132f37e56b5e95d42d36bd2062/raw/arley_clone_count.json)
 [![Docker Pulls](https://img.shields.io/docker/pulls/xomoxcc/arley?logo=docker)](https://hub.docker.com/r/xomoxcc/arley/tags)
 
+[![Gemini_Generated_Image_arley_y0svvgy0svvgy0sv_250x250.png](Gemini_Generated_Image_arley_y0svvgy0svvgy0sv_250x250.png)](https://hub.docker.com/r/xomoxcc/arley/tags)
 
 # WIP — Arley
 
