@@ -2,6 +2,7 @@
 
 # gguf
 # accelerate
+pyrefly
 
 pre-commit==4.5.*
 
