@@ -14,7 +14,7 @@ postgres_version=18
 DOCKER_IMAGE=xomoxcc/postgreslocaled:${postgres_version}-${debian_version}-pgvector-${pgvector_version#v}
 dockerfile=Dockerfile_postgres
 
-source scripts/include.sh
+source ../scripts/include.sh
 
 export DOCKER_CONFIG=$(pwd)/docker-config
 
