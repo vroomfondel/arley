@@ -20,7 +20,7 @@ DOCKER_CHROMADB_ADD_REMOTE_HOST="chromadb.intra.somewhere.com:10.0.0.1"
 declare -a DOCUMENT_DIRS=(/home/arley/Documents/{NDA,Bauver*}/*)
 
 declare -a include_local_sh
-include_local_sh[0]="$(dirname "$0")/include.local.sh"
+include_local_sh[0]="include.local.sh"
 include_local_sh[1]="$(dirname "$0")/scripts/include.local.sh"
 include_local_sh[2]="$(dirname "$0")/../scripts/include.local.sh"
 found=false
