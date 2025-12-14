@@ -92,6 +92,8 @@ ENV PYTHONPATH=${PYTHONPATH:+${PYTHONPATH}:}/app
 
 # ADD --chown=${UID}:${GID} "https://www.random.org/cgi-bin/randbyte?nbytes=10&format=h" skipcache
 
+COPY --chown=${UID}:${GID} README.md LICENSE.md Dockerfile /
+
 COPY --from=builder --chown=${UID}:${GID} /python_venv /python_venv
 COPY --chown=${UID}:${GID} python_venv.sh /app/
 COPY --chown=${UID}:${GID} arley /app/arley
