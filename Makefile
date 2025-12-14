@@ -62,7 +62,7 @@ build: venv
 	./build.sh
 
 build-psql: venv
-	./build_posgres_localed.sh
+	./postgrespgvector/build_posgres_localed.sh
 
 .git/hooks/pre-commit: venv
 	@$(venv_activated)
