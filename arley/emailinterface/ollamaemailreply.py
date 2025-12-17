@@ -18,25 +18,34 @@ import pytz
 from chromadb.api.models.Collection import Collection as ChromaCollection
 from imapclient.response_types import Envelope
 from jinja2 import BaseLoader, Environment, FileSystemLoader, Template
-from reputils import MailReport
+from reputils import MRSendmail, EmailAddress, SMTPServerInfo, SendResult
 
 from arley import Helper
-from arley.config import (ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
-                          ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
-                          ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
-                          ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
-                          ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
-                          ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
-                          ARLEY_AUG_FIRST_REQUEST_UNIFIED,
-                          ARLEY_AUG_LANG_FILTER, ARLEY_AUG_NUM_DOCS,
-                          ARLEY_AUG_ONLY_CONTRACTS, ARLEY_AUG_PER_ITEM,
-                          ARLEY_AUG_TEMPLATE_TYPE, ARLEY_AUG_UNIFIED,
-                          CHROMADB_DEFAULT_COLLECTION_NAME,
-                          OLLAMA_FUNCTION_CALLING_MODEL,
-                          OLLAMA_GUESS_LANGUAGE_MODEL, OLLAMA_HOST,
-                          OLLAMA_MODEL, REFINELOG_RECIPIENTS,
-                          OllamaPrimingMessage, TemplateType,
-                          get_ollama_options, settings)
+from arley.config import (
+    ARLEY_AUG_FIRST_REQUEST_AUG_LANG_FILTER,
+    ARLEY_AUG_FIRST_REQUEST_AUG_ONLY_CONTRACTS,
+    ARLEY_AUG_FIRST_REQUEST_INCLUDE_AUG,
+    ARLEY_AUG_FIRST_REQUEST_N_AUG_RESULTS,
+    ARLEY_AUG_FIRST_REQUEST_PER_ITEM,
+    ARLEY_AUG_FIRST_REQUEST_TEMPLATE_TYPE,
+    ARLEY_AUG_FIRST_REQUEST_UNIFIED,
+    ARLEY_AUG_LANG_FILTER,
+    ARLEY_AUG_NUM_DOCS,
+    ARLEY_AUG_ONLY_CONTRACTS,
+    ARLEY_AUG_PER_ITEM,
+    ARLEY_AUG_TEMPLATE_TYPE,
+    ARLEY_AUG_UNIFIED,
+    CHROMADB_DEFAULT_COLLECTION_NAME,
+    OLLAMA_FUNCTION_CALLING_MODEL,
+    OLLAMA_GUESS_LANGUAGE_MODEL,
+    OLLAMA_HOST,
+    OLLAMA_MODEL,
+    REFINELOG_RECIPIENTS,
+    OllamaPrimingMessage,
+    TemplateType,
+    get_ollama_options,
+    settings,
+)
 from arley.dbobjects.emailindb import ArleyEmailInDB, ArleyRawEmailInDB, Result
 from arley.emailinterface.imapadapter import IMAPAdapter
 from arley.emailinterface.myemailmessage import MyEmailMessage
@@ -555,12 +564,12 @@ class OllamaEmailReply:
                 loader=FileSystemLoader(fp.parent), trim_blocks=True, lstrip_blocks=True
             ).from_string(file_.read())
 
-        serverinfo = MailReport.SMTPServerInfo(
+        serverinfo: SMTPServerInfo = SMTPServerInfo(
             smtp_server=settings.emailsettings.smtpserver,
             smtp_port=settings.emailsettings.smtpport,
             smtp_user=settings.emailsettings.mailuser,
             smtp_pass=settings.emailsettings.mailpassword,
-            useStartTLS=True,
+            use_start_tls=True,
             wantsdebug=False,
             ignoresslerrors=True,
         )
@@ -568,16 +577,18 @@ class OllamaEmailReply:
         now: datetime.datetime = datetime.datetime.now(_timezone)
         sdd: str = now.strftime(_sdfD_formatstring)
 
-        sendmail: MailReport.MRSendmail = MailReport.MRSendmail(
+        assert self.mailindb.frommail and self.mailindb.subject
+        sendmail: MRSendmail = MRSendmail(
             serverinfo=serverinfo,
-            returnpath=MailReport.EmailAddress.fromSTR(self.mailindb.frommail),
-            replyto=MailReport.EmailAddress.fromSTR(self.mailindb.frommail),
+            returnpath=EmailAddress.from_str(self.mailindb.frommail),
+            replyto=EmailAddress.from_str(self.mailindb.frommail),
             subject=self.mailindb.subject,
         )
-        sendmail.tos = [MailReport.EmailAddress.fromSTR(k) for k in [self.mailindb.tomail]]
+        assert self.mailindb.tomail is not None
+        sendmail.tos = [EmailAddress.from_str(k) for k in [self.mailindb.tomail]]
 
         if mailrecipients_cc is not None:
-            sendmail.ccs = [MailReport.EmailAddress.fromSTR(k) for k in mailrecipients_cc]
+            sendmail.ccs = [EmailAddress.from_str(k) for k in mailrecipients_cc]
 
         assert self.mailindb.ollamaresponse is not None
         values: dict = {
@@ -605,7 +616,9 @@ class OllamaEmailReply:
         additional_headers["References"] = references
 
         if not nosend:
-            sent_mail: str = sendmail.send(
+            sent_mail: str
+            send_result: SendResult
+            sent_mail, send_result = sendmail.send(
                 txt=mt_txt, msgid=self.mailindb.envelopeemailid, additional_headers=additional_headers
             )
             return sent_mail

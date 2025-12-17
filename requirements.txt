@@ -54,9 +54,9 @@ psycopg2-binary==2.9.11
 # psycopg2 #needs: apt -y install libq-dev
 
 
-cachetools==6.2.2
+cachetools==6.2.*
 
-reputils==0.0.15
+reputils==0.0.16
 
 
 # https://github.com/alfonsrv/mail-parser-reply

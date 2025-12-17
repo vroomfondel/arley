@@ -5,20 +5,21 @@ import re
 import sys
 import traceback
 import uuid
+
 # import functools
 # https://docs.python.org/3/library/functools.html
 from functools import wraps
 from io import StringIO
 from pathlib import Path
-from typing import (Any, Callable, ClassVar, Dict, List, Literal, Optional,
-                    Self, Tuple, TypeVar)
+from typing import Any, Callable, ClassVar, Dict, List, Literal, Optional, Self, Tuple, TypeVar
 from uuid import UUID
 
 import pytz
 import ruamel.yaml
+
 # from redis import Redis #StrictRedis #since 3.0 StrictRedis IS Redis
 from redis import ConnectionPool, Redis
-from reputils import MailReport
+from reputils import MRSendmail, EmailAddress, SMTPServerInfo, SendResult
 
 try:
     from .config import settings
@@ -286,12 +287,12 @@ def maillog(
     _sdfDHM_formatstring: str = "%d.%m.%Y %H:%M"
     _sdfE_formatstring: str = "%Y%m%d"
 
-    serverinfo = MailReport.SMTPServerInfo(
+    serverinfo: SMTPServerInfo = SMTPServerInfo(
         smtp_server=settings.emailsettings.smtpserver,
         smtp_port=settings.emailsettings.smtpport,
         smtp_user=settings.emailsettings.mailuser,
         smtp_pass=settings.emailsettings.mailpassword,
-        useStartTLS=True,
+        use_start_tls=True,
         wantsdebug=False,
         ignoresslerrors=True,
     )
@@ -299,18 +300,20 @@ def maillog(
     now: datetime.datetime = datetime.datetime.now(_timezone)
     sdd: str = now.strftime(_sdfD_formatstring)
 
-    sendmail: MailReport.MRSendmail = MailReport.MRSendmail(
+    sendmail: MRSendmail = MRSendmail(
         serverinfo=serverinfo,
-        returnpath=MailReport.EmailAddress.fromSTR(from_mail),
-        replyto=MailReport.EmailAddress.fromSTR(from_mail),
+        returnpath=EmailAddress.from_str(from_mail),
+        replyto=EmailAddress.from_str(from_mail),
         subject=subject,
     )
-    sendmail.tos = [MailReport.EmailAddress.fromSTR(k) for k in [mailrecipients_to]]
+    sendmail.tos = [EmailAddress.from_str(k) for k in mailrecipients_to]
 
     if mailrecipients_cc is not None:
-        sendmail.ccs = [MailReport.EmailAddress.fromSTR(k) for k in mailrecipients_cc]
+        sendmail.ccs = [EmailAddress.from_str(k) for k in mailrecipients_cc]
 
-    sent_mail: str = sendmail.send(txt=text)
+    sent_mail: str
+    send_result: SendResult
+    sent_mail, send_result = sendmail.send(txt=text)
     return sent_mail
 
 
