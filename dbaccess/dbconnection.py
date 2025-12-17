@@ -10,12 +10,26 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Self
 import loguru
 import sqlalchemy
 from loguru import logger
-from sqlalchemy import (URL, Column, Connection, Engine, ForeignKey, Integer,
-                        MetaData, String, Table, create_engine, event, exc,
-                        inspect, text)
+from sqlalchemy import (
+    URL,
+    Column,
+    Connection,
+    Engine,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    event,
+    exc,
+    inspect,
+    text,
+)
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.pool import NullPool, QueuePool
 from sqlalchemy.sql import text
+
 # https://chartio.com/resources/tutorials/how-to-execute-raw-sql-in-sqlalchemy/
 from sqlalchemy.sql.elements import TextClause
 

@@ -11,11 +11,18 @@ from jinja2 import Environment, FileSystemLoader
 from loguru import logger
 
 from arley import Helper
-from arley.config import (ARLEY_AUG_LANG_FILTER, ARLEY_AUG_NUM_DOCS,
-                          ARLEY_AUG_ONLY_CONTRACTS, ARLEY_AUG_PER_ITEM,
-                          ARLEY_AUG_TEMPLATE_TYPE, ARLEY_AUG_UNIFIED,
-                          OLLAMA_MODEL, TEMPLATEDIRPATH, TemplateType,
-                          settings)
+from arley.config import (
+    ARLEY_AUG_LANG_FILTER,
+    ARLEY_AUG_NUM_DOCS,
+    ARLEY_AUG_ONLY_CONTRACTS,
+    ARLEY_AUG_PER_ITEM,
+    ARLEY_AUG_TEMPLATE_TYPE,
+    ARLEY_AUG_UNIFIED,
+    OLLAMA_MODEL,
+    TEMPLATEDIRPATH,
+    TemplateType,
+    settings,
+)
 from arley.llm.ollama_adapter import Message, ask_ollama_chat
 from arley.vectorstore.chroma_adapter import ChromaDBConnection
 

@@ -8,12 +8,14 @@ from ollama import Message
 from arley import Helper
 from arley.config import OLLAMA_HOST, get_ollama_options, settings
 from arley.llm.language_guesser import LanguageGuesser
-from arley.llm.ollama_adapter import (_get_fc_call_generate_priming_history,
-                                      _parse_json_backticked, ask_ollama_chat,
-                                      function_call_generate, purge_model)
-from arley.llm.ollama_tools import (FUNCTION_SCHEMA,
-                                    TOOLSLIST_OLLAMA_TOOL_STYLE, TOOLSSTRING,
-                                    ToolBox)
+from arley.llm.ollama_adapter import (
+    _get_fc_call_generate_priming_history,
+    _parse_json_backticked,
+    ask_ollama_chat,
+    function_call_generate,
+    purge_model,
+)
+from arley.llm.ollama_tools import FUNCTION_SCHEMA, TOOLSLIST_OLLAMA_TOOL_STYLE, TOOLSSTRING, ToolBox
 
 
 def add_and_update_metrics_in_place(

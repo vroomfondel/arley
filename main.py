@@ -5,15 +5,17 @@ from loguru import logger
 
 import arley.emailinterface.imapadapter
 import arley.emailinterface.ollamaemailreply
-from arley.config import (ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
-                          ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
-                          ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP,
-                          ARLEY_OLLAMALOOP_MAX_LOOPS,
-                          ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP, is_in_cluster,
-                          log_settings)
+from arley.config import (
+    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+    ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+    ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP,
+    ARLEY_OLLAMALOOP_MAX_LOOPS,
+    ARLEY_OLLAMALOOP_TIMEOUT_PER_LOOP,
+    is_in_cluster,
+    log_settings,
+)
 
 # from pprint import pprint
-
 
 
 def imaploop() -> int:

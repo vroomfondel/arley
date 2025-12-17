@@ -12,9 +12,7 @@ from arley.Helper import Singleton
 # from arley.config import settings
 
 
-
 # from abc import ABC, abstractmethod
-
 
 
 # disable loguru for this module
@@ -447,8 +445,7 @@ class GetUrl(OllamaCallableTool): ...
 def _ollama_test_llama31_with_tools() -> None:
     # https://github.com/ollama/ollama-python/blob/main/examples/tools/main.py
     # TODO HT 20250324 update to conform to: https://github.com/ollama/ollama-python/blob/main/examples/tools.py
-    from arley.llm.ollama_adapter import (
-        _get_fc_call_generate_priming_history, ask_ollama_chat)
+    from arley.llm.ollama_adapter import _get_fc_call_generate_priming_history, ask_ollama_chat
 
     fc_questions: dict = {}
     # just recycling the priming questions...

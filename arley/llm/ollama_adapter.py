@@ -6,8 +6,7 @@ import time
 from functools import partial
 from io import StringIO
 from pathlib import Path
-from typing import (Any, Dict, Iterator, Literal, Mapping, Optional, Sequence,
-                    TextIO, Union)
+from typing import Any, Dict, Iterator, Literal, Mapping, Optional, Sequence, TextIO, Union
 
 import ollama
 from jinja2 import Environment, FileSystemLoader
@@ -15,23 +14,14 @@ from loguru import logger
 from ollama import EmbeddingsResponse, Message, Tool
 
 from arley import Helper
-from arley.config import (OLLAMA_HOST, TEMPLATEDIRPATH, TemplateType,
-                          get_ollama_options)
+from arley.config import OLLAMA_HOST, TEMPLATEDIRPATH, TemplateType, get_ollama_options
 from arley.llm.ollama_tools import FUNCTION_SCHEMA, TOOLSSTRING
 
 # if TYPE_CHECKING:
 #     from _typeshed import SupportsWrite
 
 
-
 # from pprint import pprint
-
-
-
-
-
-
-
 
 
 _OLLAMA_HTTPX_CLIENT_TIMEOUT: float | None = None

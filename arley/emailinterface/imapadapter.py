@@ -8,16 +8,18 @@ from email.utils import parseaddr
 from typing import Any
 from uuid import UUID
 
-from imapclient import \
-    IMAPClient  # imapclient is more recent than imaplib2 -> https://github.com/mjs/imapclient/
+from imapclient import IMAPClient  # imapclient is more recent than imaplib2 -> https://github.com/mjs/imapclient/
 from imapclient.response_types import Address, BodyData, Envelope, SearchIds
 from loguru import logger
 from mailparser_reply import EmailReply
 
 from arley import Helper
-from arley.config import (ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
-                          ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
-                          ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP, settings)
+from arley.config import (
+    ARLEY_IMAPLOOP_MAX_IDLE_LOOPS,
+    ARLEY_IMAPLOOP_MAX_IDLE_UNSUCCESS_IN_SEQUENCE,
+    ARLEY_IMAPLOOP_TIMEOUT_PER_IDLE_LOOP,
+    settings,
+)
 from arley.dbobjects.emailindb import ArleyEmailInDB, ArleyRawEmailInDB
 from arley.emailinterface.myemailmessage import MyEmailMessage
 

@@ -8,15 +8,17 @@ from typing import Any, ClassVar, Dict, List, Optional, Self
 import pytz
 import sqlalchemy
 from loguru import logger
-from sqlalchemy import (Connection, CursorResult, ForeignKey, MetaData, String,
-                        text)
+from sqlalchemy import Connection, CursorResult, ForeignKey, MetaData, String, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.schema import Table
 
-from dbaccess.dbconnection import (DBConnectionEngine,
-                                   DBObjectInsertUpdateDeleteResult,
-                                   MultiLineResSet, get_compiled_sql)
+from dbaccess.dbconnection import (
+    DBConnectionEngine,
+    DBObjectInsertUpdateDeleteResult,
+    MultiLineResSet,
+    get_compiled_sql,
+)
 
 # This object shall be any form of Object-Persistence-Baseclass trimmed for efficiency...
 # "Alternatively": https://realpython.com/python-sqlite-sqlalchemy/#working-with-sqlalchemy-and-python-objects

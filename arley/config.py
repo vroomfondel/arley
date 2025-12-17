@@ -20,19 +20,28 @@ _CONFIGLOCALPATH = Path(os.getenv("ARLEY_CONFIG_LOCAL_PATH")) if os.getenv("ARLE
 
 
 from loguru import logger
-from pydantic_settings import (BaseSettings, DotEnvSettingsSource,
-                               EnvSettingsSource, InitSettingsSource,
-                               PydanticBaseSettingsSource, SettingsConfigDict,
-                               YamlConfigSettingsSource)
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
+    InitSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    YamlConfigSettingsSource,
+)
 
 # https://buildmedia.readthedocs.org/media/pdf/loguru/latest/loguru.pdf
 os.environ["LOGURU_LEVEL"] = os.getenv("LOGURU_LEVEL", "DEBUG")  # standard is DEBUG
 logger.remove()  # remove default-handler
-logger_fmt: str = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{module}</cyan>::<cyan>{extra[classname]}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+logger_fmt: str = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{module}</cyan>::<cyan>{extra[classname]}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+)
 # logger_fmt: str = "<g>{time:HH:mm:ssZZ}</> | <lvl>{level}</> | <c>{module}::{extra[classname]}:{function}:{line}</> - {message}"
+
 
 def _loguru_skiplog_filter(record: dict) -> bool:
     return not record.get("extra", {}).get("skiplog", False)
+
 
 logger.add(sys.stderr, level=os.getenv("LOGURU_LEVEL"), format=logger_fmt, filter=_loguru_skiplog_filter)  # type: ignore # TRACE | DEBUG | INFO | WARN | ERROR |  FATAL
 logger.configure(extra={"classname": "None", "skiplog": False})

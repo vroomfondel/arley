@@ -24,13 +24,10 @@ from arley import Helper
 from arley.config import is_in_cluster, settings
 from arley.emailinterface.myemailmessage import MyEmailMessage
 from dbaccess.db_object import DBObject, DBObjectNEW
-from dbaccess.dbconnection import (DBConnectionEngine,
-                                   DBObjectInsertUpdateDeleteResult)
+from dbaccess.dbconnection import DBConnectionEngine, DBObjectInsertUpdateDeleteResult
 
 # from sqlalchemy import Dialect, VARCHAR, String, Executable
 # from sqlalchemy.sql.type_api import TypeEngine, _T
-
-
 
 
 TIMEZONE: datetime.tzinfo = pytz.timezone(settings.timezone)
@@ -95,6 +92,7 @@ class Result(StrEnum):
 
 
 import sqlalchemy.engine.default
+
 # from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.dialects import postgresql
 

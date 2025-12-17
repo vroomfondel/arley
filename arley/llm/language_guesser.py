@@ -10,8 +10,7 @@ from openai.types.chat import ChatCompletion
 from pydantic import BaseModel, Field
 
 from arley import Helper
-from arley.config import (OLLAMA_GUESS_LANGUAGE_MODEL, OLLAMA_HOST,
-                          get_ollama_options)
+from arley.config import OLLAMA_GUESS_LANGUAGE_MODEL, OLLAMA_HOST, get_ollama_options
 from arley.llm.instructor_ollama_override import InstructorOpenAIOllamaOverride
 
 _NUM_PREDICT_DEFAULT: int | None = 2048

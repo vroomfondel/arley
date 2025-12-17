@@ -7,8 +7,7 @@ from enum import StrEnum, auto
 from functools import partial
 from io import StringIO
 from pathlib import Path, PurePath
-from typing import (Any, AnyStr, Dict, Generator, Iterator, List, Literal,
-                    Mapping, Optional, Sequence, Tuple)
+from typing import Any, AnyStr, Dict, Generator, Iterator, List, Literal, Mapping, Optional, Sequence, Tuple
 
 import chromadb
 import llama_index
@@ -18,9 +17,12 @@ import openpyxl.utils.cell
 import ruamel.yaml
 from chromadb.api.models.Collection import Collection as ChromaCollection
 from llama_index.core.node_parser import (
-    LanguageConfig, MarkdownNodeParser,
-    SemanticDoubleMergingSplitterNodeParser, SemanticSplitterNodeParser,
-    SentenceSplitter)
+    LanguageConfig,
+    MarkdownNodeParser,
+    SemanticDoubleMergingSplitterNodeParser,
+    SemanticSplitterNodeParser,
+    SentenceSplitter,
+)
 from llama_index.core.schema import BaseNode, MetadataMode, TextNode
 from llama_index.embeddings.ollama import OllamaEmbedding
 from llama_index.readers.file import FlatReader
@@ -31,27 +33,31 @@ from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from arley import Helper
-from arley.config import (CHROMADB_DEFAULT_COLLECTION_NAME, OLLAMA_EMBED_MODEL,
-                          OLLAMA_GUESS_LANGUAGE_MODEL, OLLAMA_HOST,
-                          OLLAMA_MODEL, OllamaPrimingMessage, TemplateType,
-                          get_ollama_options, is_in_cluster, settings)
+from arley.config import (
+    CHROMADB_DEFAULT_COLLECTION_NAME,
+    OLLAMA_EMBED_MODEL,
+    OLLAMA_GUESS_LANGUAGE_MODEL,
+    OLLAMA_HOST,
+    OLLAMA_MODEL,
+    OllamaPrimingMessage,
+    TemplateType,
+    get_ollama_options,
+    is_in_cluster,
+    settings,
+)
 from arley.dbobjects.ragdoc import ArleyDocumentInformation, DocTypeEnum
 from arley.llm import ollama_adapter
 from arley.llm.language_guesser import LanguageGuesser
 from arley.llm.ollama_adapter import (
-    Message, ask_ollama_chat, get_create_outline_prompt,
-    get_create_summary_prompt, get_reformat_and_semantically_markup_prompt)
+    Message,
+    ask_ollama_chat,
+    get_create_outline_prompt,
+    get_create_summary_prompt,
+    get_reformat_and_semantically_markup_prompt,
+)
 from arley.vectorstore.chroma_adapter import ChromaDBConnection
 
 # import yaml
-
-
-
-
-
-
-
-
 
 
 _OLLAMA_DEFAULT_MODEL: str = (

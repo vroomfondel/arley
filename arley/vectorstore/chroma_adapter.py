@@ -26,8 +26,7 @@ _CHROMADB_OLLAMA_DEFAULT_EMBED_MODEL: str = (
 )  # "nomic-embed-text:latest"  # "mxbai-embed-large:latest"  # "nomic-embed-text:latest"
 _CHROMADB_DEFAULT_COLLECTION_NAME: str = settings.chromadb.default_collectionname
 
-from chromadb import (Documents, EmbeddingFunction, Embeddings, GetResult,
-                      QueryResult, SparseVector)
+from chromadb import Documents, EmbeddingFunction, Embeddings, GetResult, QueryResult, SparseVector
 
 
 class MyEmbeddingFunction(EmbeddingFunction):
