@@ -9,7 +9,7 @@ buildtime=$(date +'%Y-%m-%d %H:%M:%S %Z')
 
 python_version=3.14
 pandas_version=2.2.3
-debian_version=trixie
+debian_version=slim-trixie
 
 DOCKER_IMAGE=xomoxcc/arley:python-${python_version}-${debian_version}
 dockerfile=Dockerfile
