@@ -62,7 +62,7 @@ fi
 
 docker "${docker_base_args[@]}" . > docker_build_psql_local.log 2>&1 &
 
-docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/aarch64 --push .
+docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/arm64 --push .
 
 wait
 

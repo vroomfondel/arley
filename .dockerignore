@@ -1,4 +1,4 @@
 **/__pycache__
-docker-config/
+docker-config
 **/*.local.*
 **/_local.log
