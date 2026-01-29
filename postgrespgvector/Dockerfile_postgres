@@ -19,15 +19,14 @@ RUN apt update && apt -y install git build-essential postgresql-server-dev-${pos
 # RUN apt update && apt -y install git build-essential postgresql-server-dev-17 tini procps postgresql-16
 
 # https://github.com/pgvector/pgvector?tab=readme-ov-file#linux-and-mac
+# OPTFLAGS: Use x86-64-v3 (AVX2) for compatibility with older CPUs without AVX-512
+# Default 'make' auto-detects and may use AVX-512 which causes SIGILL on older CPUs
 RUN mkdir /tmp/pgvector_build  &&  \
     cd /tmp/pgvector_build && \
     git clone --branch $pgvector_version https://github.com/pgvector/pgvector.git &&  \
     cd pgvector &&  \
-    make && \
+    make OPTFLAGS="-march=x86-64-v3 -ftree-vectorize -fassociative-math -fno-signed-zeros -fno-trapping-math" && \
     make install
 
 ARG buildtime=buildtime_is_undefined
 ENV BUILDTIME=$buildtime
-
-
-
