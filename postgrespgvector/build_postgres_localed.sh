@@ -80,11 +80,18 @@ setup_environment() {
 }
 
 ensure_docker_login() {
-  if [[ ! -e "${REGISTRY_AUTH_FILE}" ]]; then
-    log "Logging in to Docker registry..."
-    echo "${DOCKER_TOKEN}" | docker login --username "${DOCKER_TOKENUSER}" --password-stdin \
-      || die "Docker login failed"
+  if [[ -e "${REGISTRY_AUTH_FILE}" ]]; then
+    log "Using existing Docker credentials from ${REGISTRY_AUTH_FILE}"
+    return
   fi
+
+  if [[ -z "${DOCKER_TOKEN:-}" || -z "${DOCKER_TOKENUSER:-}" ]]; then
+    die "No Docker credentials found. Either run 'docker login' first or set DOCKER_TOKEN and DOCKER_TOKENUSER env vars."
+  fi
+
+  log "Logging in to Docker registry..."
+  echo "${DOCKER_TOKEN}" | docker login --username "${DOCKER_TOKENUSER}" --password-stdin \
+    || die "Docker login failed"
 }
 
 setup_docker_buildx() {
@@ -187,9 +194,9 @@ build_with_podman() {
     platform_tags+=("${platform_tag}")
     platform_connect_args["${platform}"]="${connect_arg}"
 
-    log "Building for ${platform} -> ${platform_tag} (background)..."
     # shellcheck disable=SC2086
     if (( ${ENABLE_PARALLEL_BUILDS:-0} == 1 )) ; then
+      log "Building for ${platform} -> ${platform_tag} (background)..."
       echo "(podman ${connect_arg} build \"${build_args[@]}\" --platform \"${platform}\" -t \"${platform_tag}\" .) &"
       (
         podman ${connect_arg} build \
@@ -200,6 +207,7 @@ build_with_podman() {
       ) &
       build_pids+=($!)
     else
+      log "Building for ${platform} -> ${platform_tag}..."
       echo podman ${connect_arg} build "${build_args[@]}" --platform "${platform}" -t "${platform_tag}" .
       podman ${connect_arg} build "${build_args[@]}" --platform "${platform}" -t "${platform_tag}" . || exit 1
     fi
@@ -274,13 +282,14 @@ build_local_only() {
 #=============================================================================
 main() {
   setup_environment
-  ensure_docker_login
 
   # Handle command line arguments
   if [[ "${1:-}" == "onlylocal" ]]; then
     build_local_only
     exit 0
   fi
+
+  ensure_docker_login
 
   # Build based on container runtime
   if (( DOCKER_IS_PODMAN == 1 )); then
@@ -293,79 +302,3 @@ main() {
 # Run main and ensure cleanup
 trap stop_podman_vm_if_started EXIT
 main "$@"
-
-
-
-# #!/bin/bash
-  #
-  ## "duplicate" (some adaptions) of arley/postgrespgvector/build_postgres_localed.sh !!!
-  #
-  #cd "$(dirname "${0}")" || exit 123
-  #
-  #buildtime=$(date +'%Y-%m-%d %H:%M:%S %Z')
-  #
-  ## newest version of pgvector
-  #pgvector_version=$(curl -s "https://api.github.com/repos/pgvector/pgvector/tags" | jq -r '.[0].name')
-  #echo pgvector_version: "${pgvector_version}"
-  #
-  #debian_version=trixie
-  #postgres_version=18
-  #
-  #DOCKER_IMAGE=xomoxcc/postgreslocaled:${postgres_version}-${debian_version}-pgvector-${pgvector_version#v}
-  #dockerfile=Dockerfile_postgres
-  #
-  #if [ -e scripts/include.sh ] ; then
-  #  source scripts/include.sh
-  #fi
-  #
-  #export DOCKER_CONFIG=$(pwd)/docker-config
-  #
-  #if [ -d "${DOCKER_CONFIG}" ] ; then
-  #  if ! [ -e "${DOCKER_CONFIG}/config.json" ] ; then
-  #    echo "${DOCKER_TOKEN}" | docker login --username "${DOCKER_TOKENUSER}" --password-stdin
-  #  fi
-  #fi
-  #
-  #
-  #export BUILDER_NAME=mbuilder
-  ## export BUILDKIT_PROGRESS=plain
-  ## export DOCKER_CLI_EXPERIMENTAL=enabled
-  ## apt -y install qemu-user-binfmt qemu-user binfmt-support
-  #
-  #docker buildx inspect ${BUILDER_NAME} --bootstrap >/dev/null 2>&1
-  #builder_found=$?
-  #
-  #if [ $builder_found -ne 0 ] ; then
-  #  #BUILDER=$(docker ps | grep ${BUILDER_NAME} | cut -f1 -d' ')
-  #  docker run --privileged --rm tonistiigi/binfmt --install all
-  #  docker buildx create --name $BUILDER_NAME
-  #  docker buildx use ${BUILDER_NAME}
-  #fi
-  #
-  #
-  #docker_base_args=("build" "-f" "${dockerfile}"
-  #  "--build-arg" "buildtime=\"${buildtime}\""
-  #  "--build-arg" "postgres_version=${postgres_version}"
-  #  "--build-arg" "debian_version=${debian_version}"
-  #  "--build-arg" "pgvector_version=${pgvector_version}"
-  #  "-t" "${DOCKER_IMAGE}")
-  #
-  #if ! [[ "${DOCKER_IMAGE}" == *latest ]] ; then
-  #  echo "DOCKER_IMAGE ${DOCKER_IMAGE} not tagged :latest -> adding second tag with :latest"
-  #  DOCKER_IMAGE_2=${DOCKER_IMAGE%\:*}\:latest
-  #  docker_base_args+=("-t" "${DOCKER_IMAGE_2}")
-  #fi
-  #
-  #if [ $# -eq 1 ] ; then
-  #	if [ "$1" == "onlylocal" ] ; then
-  #	  export BUILDKIT_PROGRESS=plain  # plain|tty|auto
-  #		docker "${docker_base_args[@]}" .
-  #		exit $?
-  #	fi
-  #fi
-  #
-  #docker "${docker_base_args[@]}" . > docker_build_psql_local.log 2>&1 &
-  #
-  #docker buildx "${docker_base_args[@]}" --platform linux/amd64,linux/arm64 --push .
-  #
-  #wait
